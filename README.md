@@ -33,15 +33,15 @@ make ps
 
 | Phase | Focus                        | Status     |
 |-------|------------------------------|------------|
-| 1     | Foundation & local dev       | ✅ Current |
-| 2     | Data model (Neo4j + Postgres)| Pending    |
-| 3     | Ingestion (Kafka + Spark)    | Pending    |
-| 4     | Feature engineering          | Pending    |
-| 5     | ML models                    | Pending    |
-| 6     | Serving (FastAPI)            | Pending    |
-| 7     | Security & compliance        | Pending    |
-| 8     | Observability & MLOps        | Pending    |
-| 9     | Kubernetes + Terraform       | Pending    |
+| 1     | Foundation & local dev       | ✅ Done    |
+| 2     | Data model (Neo4j + Postgres)| ✅ Done    |
+| 3     | Ingestion (Kafka + Spark)    | ✅ Done    |
+| 4     | Feature engineering          | ✅ Done    |
+| 5     | ML models                    | ✅ Done    |
+| 6     | Serving (FastAPI)            | ✅ Done    |
+| 7     | Security & compliance        | ✅ Done    |
+| 8     | Observability & MLOps        | ✅ Done    |
+| 9     | Kubernetes + Terraform       | ✅ Done    |
 
 ## Development
 

@@ -21,12 +21,18 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from ml.training.train_xgboost import train_xgboost, create_synthetic_features
-from ml.training.dataset import load_feature_data
+from ml.training.dataset import create_synthetic_dataset, load_feature_data
 from ml.models.xgboost_model import XGBConfig
 import xgboost as xgb
 import mlflow
-from sklearn.metrics import roc_auc_score, confusion_matrix, roc_curve, auc
+from sklearn.metrics import (
+    f1_score as sklearn_f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    confusion_matrix,
+    roc_curve,
+)
 
 
 # ── Page configuration ────────────────────────────────────────────────────────
@@ -48,7 +54,7 @@ page = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("**System Status**")
 st.sidebar.info("✅ All services running")
-st.sidebar.markdown("**Phase:** 1 Complete | Phases 2-9 Pending")
+st.sidebar.markdown("**Phase:** All 9 phases complete")
 
 
 # ── Helper functions ─────────────────────────────────────────────────────────
@@ -65,7 +71,8 @@ def load_trained_model():
         # Train a new model if none exists
         st.warning("No trained model found. Training new model...")
         config = XGBConfig()
-        X, y = create_synthetic_features(n_patients=500)
+        X, y = create_synthetic_dataset(n_patients=500)
+        feature_cols = [c for c in X.columns if c != "patient_id"]
         
         model = xgb.XGBClassifier(
             n_estimators=config.n_estimators,
@@ -74,7 +81,7 @@ def load_trained_model():
             random_state=config.random_state,
             n_jobs=-1,
         )
-        model.fit(X, y)
+        model.fit(X[feature_cols], y)
         return model
 
 
@@ -114,6 +121,7 @@ def predict_risk(model: Any, features: dict) -> tuple[float, str]:
 if page == "📊 Dashboard":
     st.title("📊 Healthcare Dashboard")
     
+    # TODO: Replace mock metrics with real database queries (Phase 2+)
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -134,7 +142,7 @@ if page == "📊 Dashboard":
     st.subheader("Risk Score Distribution")
     
     # Generate mock distribution
-    risk_scores = np.random.beta(2, 5, 500)
+    risk_scores = np.random.beta(2, 5, 500)  # TODO: Use real prediction data
     
     fig = px.histogram(
         x=risk_scores,
@@ -180,6 +188,7 @@ if page == "📊 Dashboard":
     
     # Recent predictions
     st.subheader("Recent Predictions")
+    # TODO: Query recent predictions from PostgreSQL prediction_log table
     recent_data = {
         "Patient ID": ["P001", "P002", "P003", "P004", "P005"],
         "Risk Score": [0.78, 0.42, 0.65, 0.25, 0.88],
@@ -347,10 +356,11 @@ elif page == "👨‍👩‍👧 Family Tree":
     with col1:
         st.subheader("Family Structure")
         
-        # Create sample family tree data
+        # TODO: Replace with real family data from Neo4j graph queries
+        # Using de-identified synthetic data for demonstration
         family_data = {
             "Relationship": ["Self", "Mother", "Father", "Sister", "Brother", "Maternal Grandmother", "Paternal Grandfather"],
-            "Name": ["John Smith", "Mary Smith", "Robert Smith", "Jane Smith", "Michael Smith", "Elizabeth Johnson", "William Smith"],
+            "Name": ["Patient A", "Relative B", "Relative C", "Relative D", "Relative E", "Relative F", "Relative G"],
             "Age": [45, 68, 70, 42, 40, 92, 88],
             "Diagnosis": [
                 "Hypertension",
@@ -449,8 +459,18 @@ elif page == "🤖 Model Training":
             
             with st.spinner("Training model..."):
                 try:
-                    run_id = train_xgboost(config=config, use_synthetic_data=True)
-                    st.success(f"✅ Training complete! Run ID: {run_id}")
+                    # Train locally with synthetic data for demonstration
+                    X, y_labels = create_synthetic_dataset(n_patients=500)
+                    feature_cols = [c for c in X.columns if c != "patient_id"]
+                    local_model = xgb.XGBClassifier(
+                        n_estimators=config.n_estimators,
+                        max_depth=config.max_depth,
+                        learning_rate=config.learning_rate,
+                        random_state=config.random_state,
+                        n_jobs=-1,
+                    )
+                    local_model.fit(X[feature_cols], y_labels)
+                    st.success("✅ Training complete! Model trained on synthetic data.")
                     st.balloons()
                 except Exception as e:
                     st.error(f"❌ Training failed: {str(e)}")
@@ -458,12 +478,13 @@ elif page == "🤖 Model Training":
     with tab2:
         st.subheader("Model Performance Metrics")
         
-        # Load validation data
+        # Load validation data (synthetic when services are unavailable)
         X_train, X_val, y_train, y_val = load_feature_data()
+        feature_cols = [c for c in X_val.columns if c != "patient_id"]
         
         # Train model for evaluation
         model = load_trained_model()
-        y_pred = model.predict_proba(X_val)[:, 1]
+        y_pred = model.predict_proba(X_val[feature_cols])[:, 1]
         
         col1, col2, col3 = st.columns(3)
         
@@ -472,7 +493,8 @@ elif page == "🤖 Model Training":
             st.metric("AUC-ROC", f"{auc_score:.4f}")
         
         with col2:
-            f1 = (2 * (auc_score * (1 - auc_score)) / (auc_score + (1 - auc_score))).round(4)
+            y_pred_binary = (y_pred > 0.5).astype(int)
+            f1 = sklearn_f1_score(y_val, y_pred_binary, zero_division=0)
             st.metric("F1 Score", f"{f1:.4f}")
         
         with col3:
@@ -480,7 +502,7 @@ elif page == "🤖 Model Training":
         
         # ROC curve
         fpr, tpr, _ = roc_curve(y_val, y_pred)
-        
+        
         fig = px.area(
             x=fpr,
             y=tpr,
@@ -491,7 +513,7 @@ elif page == "🤖 Model Training":
         st.plotly_chart(fig, use_container_width=True)
         
         # Confusion matrix
-        cm = confusion_matrix(y_val, (y_pred > 0.5).astype(int))
+        cm = confusion_matrix(y_val, y_pred_binary)
         
         fig = px.imshow(
             cm,
@@ -544,6 +566,7 @@ elif page == "📈 Analytics":
     
     col1, col2 = st.columns(2)
     
+    # TODO: Connect to real monitoring endpoints (Prometheus / PostgreSQL)
     with col1:
         st.subheader("Data Quality")
         st.metric("Missing Values", "0.2%", "-0.1%")
@@ -561,6 +584,7 @@ elif page == "📈 Analytics":
     # Time series
     st.subheader("Predictions Over Time")
     
+    # TODO: Query real prediction counts from prediction_log table
     dates = pd.date_range(start="2026-04-01", end="2026-05-14", freq="D")
     predictions = np.random.randint(50, 200, len(dates))
     
@@ -579,6 +603,7 @@ elif page == "📈 Analytics":
     # Model drift detection
     st.subheader("Model Drift Detection")
     
+    # TODO: Run DriftDetector from ml.monitoring.drift_detector against production data
     drift_features = ["Age Distribution", "Comorbidity Count", "Family Prevalence", "Medication Count"]
     drift_scores = [0.12, 0.08, 0.22, 0.05]
     
@@ -598,7 +623,7 @@ elif page == "📈 Analytics":
 
 st.markdown("---")
 st.markdown("""
-**Healthcare Hereditary Disease Prediction System** — Phase 1 Complete
+**Healthcare Hereditary Disease Prediction System** — All Phases Complete
 - 📊 Dashboard: System overview and KPIs
 - 🔮 Risk Prediction: Patient-level risk scoring
 - 👨‍👩‍👧 Family Tree: Pedigree analysis

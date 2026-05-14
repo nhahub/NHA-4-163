@@ -128,7 +128,6 @@ class HeredityXGBModel:
             early_stopping_rounds=self.config.early_stopping_rounds,
             random_state=self.config.random_state,
             n_jobs=self.config.n_jobs,
-            use_label_encoder=False,
             verbosity=0,
         )
         self._model.fit(

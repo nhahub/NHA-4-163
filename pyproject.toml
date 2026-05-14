@@ -32,6 +32,8 @@ dependencies = [
     "alembic==1.13.1",
     "confluent-kafka==2.3.0",
     "requests==2.31.0",
+    "great-expectations==0.18.12",
+    "scipy==1.12.0",
 ]
 
 [tool.setuptools]

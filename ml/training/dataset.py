@@ -12,30 +12,46 @@ Data flow
 from __future__ import annotations
 
 import logging
-from typing import Tuple
+from typing import Any, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder
+
+from ml.features.registry import FEATURE_VECTOR
 
 log = logging.getLogger(__name__)
 
+# Age groups in ordinal order for encoding.
+_AGE_GROUP_ORDER: list[str] = ["0s", "10s", "20s", "30s", "40s", "50s", "60s", "70s", "80s", "90+"]
+
+# Numeric columns that may contain nulls — imputed with column median.
+_NULLABLE_NUMERIC_COLS: list[str] = [
+    "adherence_proxy",
+    "family_clustering_coefficient",
+    "shortest_path_to_affected",
+]
+
+
+# ── Synthetic data for development ────────────────────────────────────────────
 
 def create_synthetic_dataset(
     n_patients: int = 500,
     random_state: int = 42,
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """Create synthetic patient features and labels.
-    
+
     Args:
         n_patients: Number of synthetic patients
         random_state: Random seed
-        
+
     Returns:
         X: Features DataFrame
         y: Labels Series
     """
     np.random.seed(random_state)
-    
+
     X = pd.DataFrame({
         "patient_id": np.arange(n_patients),
         "age_years": np.random.randint(18, 85, n_patients),
@@ -51,7 +67,7 @@ def create_synthetic_dataset(
         "shortest_path_to_affected": np.random.randint(-1, 5, n_patients),
         "family_risk_prevalence": np.random.uniform(0, 1, n_patients),
     })
-    
+
     # Generate labels with signal
     risk_score = (
         0.3 * (X["hereditary_condition_count"] > 0).astype(int)
@@ -60,54 +76,58 @@ def create_synthetic_dataset(
         + 0.1 * (X["age_years"] > 60).astype(int)
         + 0.2 * np.random.random(n_patients)
     )
-    
+
     y = (risk_score > 0.5).astype(int)
     return X, y
 
 
 def load_feature_data(
-    feature_date_start: str = "2026-01-01",
-    feature_date_end: str = "2026-05-14",
-    split_by_patient: bool = True,
+    n_patients: int = 500,
     random_state: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Load features and split by patient to prevent leakage.
-    
+    """Load or generate features and split by patient to prevent leakage.
+
+    Used by the Streamlit UI for interactive evaluation. Generates synthetic
+    data when production services are unavailable.
+
     Args:
-        feature_date_start: Start date (ISO format)
-        feature_date_end: End date (ISO format)
-        split_by_patient: If True, split by patient_id
-        random_state: Random seed
-        
+        n_patients: Number of synthetic patients to generate.
+        random_state: Random seed for reproducibility.
+
     Returns:
-        X_train, X_val, y_train, y_val
+        (X_train, X_val, y_train, y_val) split by patient_id.
     """
     np.random.seed(random_state)
-    
+
     # Load or generate data
-    X, y = create_synthetic_dataset(n_patients=500, random_state=random_state)
-    
+    X, y = create_synthetic_dataset(n_patients=n_patients, random_state=random_state)
+
     # Split by patient_id to prevent leakage
-    if split_by_patient:
-        patient_ids = X["patient_id"].unique()
-        train_patients = np.random.choice(
-            patient_ids,
-            size=int(0.7 * len(patient_ids)),
-            replace=False,
-        )
-        train_mask = X["patient_id"].isin(train_patients)
-    else:
-        train_mask = np.random.random(len(X)) < 0.7
-    
+    patient_ids = X["patient_id"].unique()
+    train_patients = np.random.choice(
+        patient_ids,
+        size=int(0.7 * len(patient_ids)),
+        replace=False,
+    )
+    train_mask = X["patient_id"].isin(train_patients)
+
     X_train = X[train_mask].reset_index(drop=True)
     y_train = y[train_mask].reset_index(drop=True)
-    
+
     X_val = X[~train_mask].reset_index(drop=True)
     y_val = y[~train_mask].reset_index(drop=True)
-    
-    log.info(f"Train: {len(X_train)}, Val: {len(X_val)}")
-    
+
+    log.info("Train: %d, Val: %d", len(X_train), len(X_val))
+
     return X_train, X_val, y_train, y_val
+
+
+# ── Feature loading (production) ─────────────────────────────────────────────
+
+def load_feature_vector(
+    source: str | pd.DataFrame,
+    feature_date: str,
+    spark: Any = None,
 ) -> pd.DataFrame:
     """Load the joined patient feature vector for a given date.
 
@@ -219,13 +239,14 @@ def build_dataset(
 
     log.info("Dataset: %d patients after join", len(merged))
 
-    # Ordinal-encode age_group
-    enc = OrdinalEncoder(
-        categories=[_AGE_GROUP_ORDER],
-        handle_unknown="use_encoded_value",
-        unknown_value=-1,
-    )
-    merged["age_group"] = enc.fit_transform(merged[["age_group"]]).astype(np.float32)
+    # Ordinal-encode age_group if present
+    if "age_group" in merged.columns:
+        enc = OrdinalEncoder(
+            categories=[_AGE_GROUP_ORDER],
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,
+        )
+        merged["age_group"] = enc.fit_transform(merged[["age_group"]]).astype(np.float32)
 
     # Impute nullable numeric columns with train-set median (computed here on full set;
     # callers must ensure imputation is re-fit on train split only — see train_*.py).
@@ -389,7 +410,6 @@ def build_pyg_data(
     x_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.float32)
 
-    pid_set = set(patient_ids.tolist())
     train_mask = torch.tensor([pid in set(train_ids.tolist()) for pid in patient_ids])
     val_mask = torch.tensor([pid in set(val_ids.tolist()) for pid in patient_ids])
     test_mask = torch.tensor([pid in set(test_ids.tolist()) for pid in patient_ids])

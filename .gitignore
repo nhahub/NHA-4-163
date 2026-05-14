@@ -7,7 +7,7 @@ __pycache__/
 .venv/
 .venv-run/
 venv/
-Healthcare/
+Healthcare/  # Virtual environment (not project code) — rename to .venv if recreating
 *.egg-info/
 dist/
 build/

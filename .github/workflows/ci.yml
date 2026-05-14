@@ -36,8 +36,7 @@ jobs:
         run: black --check .
 
       - name: Mypy type check
-        run: mypy libs/ services/ pipelines/ ml/ || true
-        # || true: mypy warnings don't block CI until stubs are complete (Phase 2+)
+        run: mypy libs/ services/ pipelines/ ml/
 
   # ── Secret scanning ─────────────────────────────────────────────────────────
   secrets-scan:
