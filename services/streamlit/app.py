@@ -544,10 +544,11 @@ elif page == "🤖 Model Training":
                 "Importance": importance,
             }).sort_values("Importance", ascending=True)
             
-            fig = px.barh(
+            fig = px.bar(
                 fi_df,
                 x="Importance",
                 y="Feature",
+                orientation="h",
                 title="Feature Importance (SHAP)",
                 color="Importance",
                 color_continuous_scale="Viridis",

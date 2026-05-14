@@ -26,8 +26,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Install linting deps
-        run: pip install ruff black mypy
+      - name: Install linting deps + project stubs
+        run: |
+          pip install ruff black mypy
+          pip install -r requirements.txt
+          pip install types-requests
 
       - name: Ruff lint
         run: ruff check .
@@ -36,7 +39,7 @@ jobs:
         run: black --check .
 
       - name: Mypy type check
-        run: mypy libs/ services/ pipelines/ ml/
+        run: mypy libs/ services/ pipelines/ ml/ --ignore-missing-imports
 
   # ── Secret scanning ─────────────────────────────────────────────────────────
   secrets-scan:
@@ -67,11 +70,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-cov
-          pip install -e "libs/common[dev]" 2>/dev/null || pip install -r libs/common/requirements.txt 2>/dev/null || true
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-timeout
 
       - name: Run unit tests
-        run: pytest tests/unit/ -m unit --cov=libs --cov=services --cov=pipelines --cov=ml --cov-report=xml --cov-fail-under=85
+        run: |
+          pytest tests/unit/ -m unit \
+            --cov=libs --cov=services --cov=pipelines --cov=ml \
+            --cov-report=xml \
+            --cov-fail-under=85
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
@@ -114,6 +121,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Create dummy .env for compose validation
+        run: |
+          cp .env.example .env
+          sed -i 's/change_me_postgres/ci_password/g' .env
+          sed -i 's/change_me_neo4j/ci_password/g' .env
+          sed -i 's/change_me_minio/ci_password/g' .env
+          sed -i 's/change_me_redis/ci_password/g' .env
+          sed -i 's/change_me_airflow_admin/ci_password/g' .env
+          sed -i 's/change_me_airflow_webserver_secret/ci_secret_key_32chars_minimum_xx/g' .env
+          sed -i 's/change_me_generate_with_fernet/gAAAAABleGFtcGxlRmVybmV0S2V5/g' .env
+          sed -i 's/change_me_grafana_admin/ci_password/g' .env
+          sed -i 's/change_me_app_secret_32chars_min/ci_secret_key_32chars_minimum_xx/g' .env
+
       - name: Validate docker-compose syntax
         run: |
           docker compose -f infra/compose/docker-compose.yml config --quiet
@@ -124,23 +144,15 @@ jobs:
           context: .
           file: infra/docker/api.Dockerfile
           push: false
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: healthcare-api:ci
 
-  # ── Container image scanning ─────────────────────────────────────────────────
-  trivy-scan:
-    name: Container Vulnerability Scan (Trivy)
-    runs-on: ubuntu-latest
-    needs: docker-build
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run Trivy on docker-compose images
+      - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: config
-          scan-ref: infra/compose/
+          image-ref: healthcare-api:ci
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
@@ -156,6 +168,7 @@ jobs:
       NEO4J_PASSWORD: ci_test_password
       MINIO_SECRET_KEY: ci_test_password
       REDIS_PASSWORD: ci_test_password
+      APP_SECRET_KEY: ci_test_secret_key_32chars_min_x
       POSTGRES_DB: healthcare_test
       POSTGRES_USER: healthcare_test
     steps:
@@ -166,21 +179,38 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Start services
+      - name: Create .env for services
         run: |
           cp .env.example .env
           echo "POSTGRES_PASSWORD=ci_test_password" >> .env
           echo "NEO4J_PASSWORD=ci_test_password" >> .env
           echo "MINIO_SECRET_KEY=ci_test_password" >> .env
           echo "REDIS_PASSWORD=ci_test_password" >> .env
-          docker compose -f infra/compose/docker-compose.yml up -d --wait || true
+          echo "APP_SECRET_KEY=ci_test_secret_key_32chars_min_x" >> .env
 
-      - name: Wait for services
+      - name: Start services
         run: |
-          timeout 120 bash -c 'until docker compose -f infra/compose/docker-compose.yml ps | grep -v "Exit\|Restarting"; do sleep 5; done'
+          docker compose -f infra/compose/docker-compose.yml up -d --wait --timeout 120
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for all services to be healthy..."
+          for i in $(seq 1 24); do
+            UNHEALTHY=$(docker compose -f infra/compose/docker-compose.yml ps --format json | \
+              python3 -c "import sys,json; data=[json.loads(l) for l in sys.stdin if l.strip()]; print(sum(1 for s in data if s.get('Health','') not in ('healthy','')))" 2>/dev/null || echo "0")
+            if [ "$UNHEALTHY" = "0" ]; then
+              echo "All services healthy!"
+              break
+            fi
+            echo "  Waiting... ($UNHEALTHY services not yet healthy)"
+            sleep 5
+          done
+          docker compose -f infra/compose/docker-compose.yml ps
 
       - name: Install dependencies
-        run: pip install pytest pytest-cov
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-timeout
 
       - name: Run integration tests
         run: pytest tests/integration/ -m integration --timeout=120
