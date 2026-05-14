@@ -48,7 +48,7 @@ st.sidebar.title("🏥 Healthcare Prediction System")
 
 page = st.sidebar.radio(
     "Navigate",
-    ["📊 Dashboard", "🔮 Risk Prediction", "👨‍👩‍👧 Family Tree", "🤖 Model Training", "📈 Analytics"],
+    ["📊 Dashboard", "👤 Patient Management", "🔮 Risk Prediction", "👨‍👩‍👧 Family Tree", "🤖 Model Training", "📈 Analytics"],
 )
 
 st.sidebar.markdown("---")
@@ -626,6 +626,7 @@ st.markdown("---")
 st.markdown("""
 **Healthcare Hereditary Disease Prediction System** — All Phases Complete
 - 📊 Dashboard: System overview and KPIs
+- 👤 Patient Management: Register and manage patients, conditions, family, medications
 - 🔮 Risk Prediction: Patient-level risk scoring
 - 👨‍👩‍👧 Family Tree: Pedigree analysis
 - 🤖 Model Training: ML model management

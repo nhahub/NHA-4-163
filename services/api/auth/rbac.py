@@ -60,6 +60,8 @@ class Permission(str, Enum):
     PREDICT_SYMPTOM = "predict:symptom"
     READ_FAMILY_PROFILE = "read:family_profile"
     READ_PATIENT = "read:patient"
+    WRITE_PATIENT = "write:patient"
+    WRITE_CLINICAL = "write:clinical"
     VIEW_AUDIT_LOG = "view:audit_log"
     MANAGE_USERS = "manage:users"
 
@@ -71,9 +73,12 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         Permission.PREDICT_SYMPTOM,
         Permission.READ_FAMILY_PROFILE,
         Permission.READ_PATIENT,
+        Permission.WRITE_PATIENT,
+        Permission.WRITE_CLINICAL,
     }),
     Role.RESEARCHER: frozenset({
         Permission.PREDICT_RISK,
+        Permission.READ_PATIENT,
     }),
     Role.SERVICE: frozenset({
         Permission.PREDICT_RISK,

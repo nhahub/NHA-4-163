@@ -47,7 +47,11 @@ from services.api.middleware.metrics import MODEL_LOADED, PrometheusMetricsMiddl
 from services.api.middleware.rate_limit import RateLimitMiddleware
 from services.api.routers import health, patients, predictions
 from services.api.routers.auth import router as auth_router
+from services.api.routers.conditions import router as conditions_router
+from services.api.routers.family import router as family_router
+from services.api.routers.medications import router as medications_router
 from services.api.routers.metrics_router import router as metrics_router
+from services.api.routers.patient_crud import router as patient_crud_router
 from services.api.services.cache_service import CacheService
 from services.api.services.model_service import ModelService
 
@@ -131,7 +135,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Healthcare Hereditary Disease Prediction API",
-        version="0.8.0",
+        version="1.0.0",
         description=(
             "Predicts hereditary disease risk from patient demographics, "
             "comorbidities, medications, and family graph structure. "
@@ -153,7 +157,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -172,6 +176,10 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(predictions.router)
     app.include_router(patients.router)
+    app.include_router(patient_crud_router)   # Patient CRUD
+    app.include_router(conditions_router)     # Condition CRUD
+    app.include_router(family_router)         # Family relationship CRUD
+    app.include_router(medications_router)    # Medication CRUD
 
     return app
 
