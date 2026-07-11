@@ -5,9 +5,10 @@ No Spark or external services required — pure Pydantic validation tests.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
+from pydantic import ValidationError
 
 from pipelines.spark.streaming.validators import (
     DiagnosisAddedEvent,
@@ -17,7 +18,7 @@ from pipelines.spark.streaming.validators import (
     RelativeLinkedEvent,
 )
 
-_NOW = datetime.now(timezone.utc)
+_NOW = datetime.now(UTC)
 _VALID_UUID = "550e8400-e29b-41d4-a716-446655440000"
 _VALID_UUID2 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 
@@ -25,6 +26,7 @@ _VALID_UUID2 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 # ---------------------------------------------------------------------------
 # PatientCreatedEvent
 # ---------------------------------------------------------------------------
+
 
 class TestPatientCreatedEvent:
     def _base(self, **overrides: object) -> dict:
@@ -45,7 +47,7 @@ class TestPatientCreatedEvent:
             PatientCreatedEvent(**self._base(patient_id="not-a-uuid"))
 
     def test_invalid_gender_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientCreatedEvent(**self._base(gender="alien"))
 
     def test_valid_gender_values(self) -> None:
@@ -74,6 +76,7 @@ class TestPatientCreatedEvent:
 # DiagnosisAddedEvent
 # ---------------------------------------------------------------------------
 
+
 class TestDiagnosisAddedEvent:
     def _base(self, **overrides: object) -> dict:
         return {
@@ -93,7 +96,7 @@ class TestDiagnosisAddedEvent:
         assert e.code == "I10"
 
     def test_invalid_clinical_status(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             DiagnosisAddedEvent(**self._base(clinical_status="cured"))
 
     def test_all_valid_clinical_statuses(self) -> None:
@@ -118,6 +121,7 @@ class TestDiagnosisAddedEvent:
 # PrescriptionIssuedEvent
 # ---------------------------------------------------------------------------
 
+
 class TestPrescriptionIssuedEvent:
     def _base(self, **overrides: object) -> dict:
         return {
@@ -138,7 +142,7 @@ class TestPrescriptionIssuedEvent:
         assert e.medication_code == "198440"
 
     def test_invalid_status(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrescriptionIssuedEvent(**self._base(status="prescribed"))
 
     def test_negative_dose_quantity_rejected(self) -> None:
@@ -157,6 +161,7 @@ class TestPrescriptionIssuedEvent:
 # ---------------------------------------------------------------------------
 # RelativeLinkedEvent
 # ---------------------------------------------------------------------------
+
 
 class TestRelativeLinkedEvent:
     def _base(self, **overrides: object) -> dict:
@@ -196,6 +201,7 @@ class TestRelativeLinkedEvent:
 # ObservationRecordedEvent
 # ---------------------------------------------------------------------------
 
+
 class TestObservationRecordedEvent:
     def _base(self, **overrides: object) -> dict:
         return {
@@ -216,7 +222,7 @@ class TestObservationRecordedEvent:
         assert e.code == "8302-2"
 
     def test_invalid_status(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ObservationRecordedEvent(**self._base(status="done"))
 
     def test_ref_range_inverted_rejected(self) -> None:

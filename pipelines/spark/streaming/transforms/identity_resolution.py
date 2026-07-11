@@ -30,10 +30,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Iterator
 
-from pyspark.sql import DataFrame, Row, SparkSession
-from pyspark.sql import functions as F
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import (
     DoubleType,
     StringType,
@@ -46,21 +44,24 @@ log = logging.getLogger(__name__)
 MATCH_THRESHOLD = 0.85
 """Composite score above which a pair is flagged as a probable duplicate."""
 
-_CANDIDATE_SCHEMA = StructType([
-    StructField("patient_id_a", StringType(), nullable=False),
-    StructField("patient_id_b", StringType(), nullable=False),
-    StructField("score", DoubleType(), nullable=False),
-    StructField("family_name_sim", DoubleType(), nullable=True),
-    StructField("given_name_sim", DoubleType(), nullable=True),
-    StructField("dob_match", DoubleType(), nullable=True),
-    StructField("gender_match", DoubleType(), nullable=True),
-    StructField("block_key", StringType(), nullable=False),
-])
+_CANDIDATE_SCHEMA = StructType(
+    [
+        StructField("patient_id_a", StringType(), nullable=False),
+        StructField("patient_id_b", StringType(), nullable=False),
+        StructField("score", DoubleType(), nullable=False),
+        StructField("family_name_sim", DoubleType(), nullable=True),
+        StructField("given_name_sim", DoubleType(), nullable=True),
+        StructField("dob_match", DoubleType(), nullable=True),
+        StructField("gender_match", DoubleType(), nullable=True),
+        StructField("block_key", StringType(), nullable=False),
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
 # Jaro-Winkler similarity (pure Python, no external dep)
 # ---------------------------------------------------------------------------
+
 
 def _jaro(s1: str, s2: str) -> float:
     """Compute Jaro similarity between two strings.
@@ -129,7 +130,7 @@ def _jaro_winkler(s1: str, s2: str, p: float = 0.1) -> float:
     s1, s2 = s1.lower(), s2.lower()
     jaro = _jaro(s1, s2)
     prefix = 0
-    for c1, c2 in zip(s1[:4], s2[:4]):
+    for c1, c2 in zip(s1[:4], s2[:4], strict=False):
         if c1 == c2:
             prefix += 1
         else:
@@ -140,6 +141,7 @@ def _jaro_winkler(s1: str, s2: str, p: float = 0.1) -> float:
 # ---------------------------------------------------------------------------
 # Blocking + comparison
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PatientRecord:
@@ -168,12 +170,7 @@ def _score_pair(a: PatientRecord, b: PatientRecord) -> float:
     dob_match = 1.0 if a.date_of_birth and a.date_of_birth == b.date_of_birth else 0.0
     gender_match = 1.0 if a.gender and a.gender == b.gender else 0.0
 
-    return (
-        0.4 * family_sim
-        + 0.3 * given_sim
-        + 0.2 * dob_match
-        + 0.1 * gender_match
-    )
+    return 0.4 * family_sim + 0.3 * given_sim + 0.2 * dob_match + 0.1 * gender_match
 
 
 def _build_block_key(record: PatientRecord) -> str | None:
@@ -247,16 +244,18 @@ def resolve_identities(df: DataFrame, spark: SparkSession) -> DataFrame:
                 score = 0.4 * family_sim + 0.3 * given_sim + 0.2 * dob_match + 0.1 * gender_match
 
                 if score >= MATCH_THRESHOLD:
-                    candidates.append((
-                        a.patient_id,
-                        b.patient_id,
-                        round(score, 4),
-                        round(family_sim, 4),
-                        round(given_sim, 4),
-                        dob_match,
-                        gender_match,
-                        block_key,
-                    ))
+                    candidates.append(
+                        (
+                            a.patient_id,
+                            b.patient_id,
+                            round(score, 4),
+                            round(family_sim, 4),
+                            round(given_sim, 4),
+                            dob_match,
+                            gender_match,
+                            block_key,
+                        )
+                    )
 
     if not candidates:
         return spark.createDataFrame([], _CANDIDATE_SCHEMA)

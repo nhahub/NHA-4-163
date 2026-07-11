@@ -132,8 +132,13 @@ class TestPhiRedactingFilter:
 
     def _make_record(self, msg: str) -> logging.LogRecord:
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg=msg, args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
         )
         return record
 

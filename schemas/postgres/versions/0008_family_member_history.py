@@ -5,20 +5,22 @@ Revision ID: m0008
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "m0008"
-down_revision: Union[str, None] = "m0007"
+down_revision: str | None = "m0007"
 branch_labels = None
 depends_on = None
 
 _FMH_STATUS = postgresql.ENUM(
-    "partial", "completed", "entered-in-error", "health-unknown",
-    name="family_member_history_status", create_type=True,
+    "partial",
+    "completed",
+    "entered-in-error",
+    "health-unknown",
+    name="family_member_history_status",
+    create_type=False,
 )
 
 
@@ -27,12 +29,23 @@ def upgrade() -> None:
 
     op.create_table(
         "family_member_history",
-        sa.Column("id", postgresql.UUID(as_uuid=True),
-                  server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("patient_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("patient.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("related_patient_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("patient.id", ondelete="SET NULL")),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "patient_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("patient.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "related_patient_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("patient.id", ondelete="SET NULL"),
+        ),
         sa.Column("status", _FMH_STATUS, nullable=False),
         sa.Column("relationship_code", sa.String(50), nullable=False),
         sa.Column("relationship_display", sa.String(100)),
@@ -49,10 +62,20 @@ def upgrade() -> None:
         sa.Column("deceased", sa.Boolean),
         sa.Column("deceased_age_years", sa.Integer),
         sa.Column("deceased_date", sa.Date),
-        sa.Column("conditions", postgresql.JSONB, server_default="'[]'"),
+        sa.Column("conditions", postgresql.JSONB, server_default="[]"),
         sa.Column("neo4j_synced", sa.Boolean, server_default="false", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(255)),
         sa.Column("updated_by", sa.String(255)),
     )
@@ -69,13 +92,11 @@ def upgrade() -> None:
         "USING gin (conditions jsonb_path_ops);"
     )
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TRIGGER trg_fmh_updated_at
         BEFORE UPDATE ON family_member_history
         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

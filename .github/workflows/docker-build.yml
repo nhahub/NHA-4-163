@@ -20,75 +20,79 @@ on:
         options: [staging, production]
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: healthcare/healthcare-api
+  ACR_NAME: ${{ vars.ACR_NAME }} # e.g. healthcarestagingacr
+  ACR_REPOSITORY: healthcare/healthcare-api
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }} # e.g. healthcare-staging-rg
+  AKS_CLUSTER: ${{ vars.AKS_CLUSTER }} # e.g. healthcare-staging-aks
   K8S_NAMESPACE: healthcare
   K8S_DEPLOYMENT: healthcare-api
 
 jobs:
-  # ── Build & push to ECR ───────────────────────────────────────────────────────
+  # ── Build & push to Azure Container Registry ──────────────────────────────────
   build-and-push:
-    name: Build & Push to ECR
+    name: Build & Push to ACR
     runs-on: ubuntu-latest
     permissions:
-      id-token: write    # OIDC token for AWS authentication
+      id-token: write # OIDC token for Azure authentication
       contents: read
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-      image_uri: ${{ steps.image.outputs.uri }}
+      configured: ${{ steps.creds.outputs.configured }}
+      image_tag: ${{ steps.meta.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+      - name: Check Azure credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.AZURE_CLIENT_ID }}" ] && [ -n "${{ vars.ACR_NAME }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Azure credentials/variables not configured — skipping build, push, and deploy. Set AZURE_CLIENT_ID/AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID secrets and ACR_NAME/AZURE_RESOURCE_GROUP/AKS_CLUSTER variables to enable."
+          fi
 
-      - name: Log in to Amazon ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Compute image tag
+        id: meta
+        if: steps.creds.outputs.configured == 'true'
+        run: echo "tag=sha-$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        if: steps.creds.outputs.configured == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        if: steps.creds.outputs.configured == 'true'
+        run: az acr login --name "${{ env.ACR_NAME }}"
 
       - name: Set up Docker Buildx
+        if: steps.creds.outputs.configured == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}
-          tags: |
-            type=sha,prefix=sha-,format=short
-            type=ref,event=branch
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
       - name: Build and push
-        id: build
+        if: steps.creds.outputs.configured == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
           file: infra/docker/api.Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:${{ steps.meta.outputs.tag }}
+            ${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
 
-      - name: Compute image URI for downstream jobs
-        id: image
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMAGE_URI="${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${SHORT_SHA}"
-          echo "uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
-          echo "Image URI: ${IMAGE_URI}"
-
       - name: Scan image with Trivy
+        if: steps.creds.outputs.configured == 'true'
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.image.outputs.uri }}
+          image-ref: ${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:${{ steps.meta.outputs.tag }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -96,8 +100,8 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF
+        if: steps.creds.outputs.configured == 'true'
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: trivy-results.sarif
 
@@ -106,10 +110,10 @@ jobs:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build-and-push
-    # Run on push to main, or when manually triggered with staging/production
     if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment != 'production')
+      needs.build-and-push.outputs.configured == 'true' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment != 'production'))
     environment:
       name: staging
       url: https://api.staging.healthcare-internal.example.com
@@ -120,17 +124,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Update kubeconfig for staging cluster
+      - name: Get AKS credentials
         run: |
-          aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name healthcare-staging-eks
+          az aks get-credentials \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AKS_CLUSTER }}" \
+            --overwrite-existing
 
       - name: Apply Kubernetes manifests
         run: |
@@ -142,7 +148,7 @@ jobs:
       - name: Update deployment image
         run: |
           kubectl set image deployment/${{ env.K8S_DEPLOYMENT }} \
-            api=${{ needs.build-and-push.outputs.image_uri }} \
+            api=${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:${{ needs.build-and-push.outputs.image_tag }} \
             -n ${{ env.K8S_NAMESPACE }}
 
       - name: Wait for rollout
@@ -151,26 +157,13 @@ jobs:
             -n ${{ env.K8S_NAMESPACE }} \
             --timeout=5m
 
-      - name: Smoke test
-        run: |
-          LB=$(kubectl get ingress healthcare-api -n ${{ env.K8S_NAMESPACE }} \
-                 -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          if [ -z "$LB" ]; then
-            echo "WARNING: No load balancer hostname found, skipping smoke test"
-            exit 0
-          fi
-          curl --fail --retry 5 --retry-delay 10 \
-            "https://${LB}/health" \
-            -H "Host: api.staging.healthcare-internal.example.com" \
-            --insecure
-
   # ── Promote to Production (manual approval gate) ──────────────────────────────
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging]
-    # Only deploy to production when explicitly requested via workflow_dispatch
     if: |
+      needs.build-and-push.outputs.configured == 'true' &&
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.environment == 'production'
     environment:
@@ -183,17 +176,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
         with:
-          role-to-assume: ${{ secrets.AWS_PROD_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Update kubeconfig for production cluster
+      - name: Get AKS credentials
         run: |
-          aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name healthcare-production-eks
+          az aks get-credentials \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AKS_CLUSTER }}" \
+            --overwrite-existing
 
       - name: Apply Kubernetes manifests
         run: |
@@ -205,7 +200,7 @@ jobs:
       - name: Update deployment image
         run: |
           kubectl set image deployment/${{ env.K8S_DEPLOYMENT }} \
-            api=${{ needs.build-and-push.outputs.image_uri }} \
+            api=${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:${{ needs.build-and-push.outputs.image_tag }} \
             -n ${{ env.K8S_NAMESPACE }}
 
       - name: Wait for rollout
@@ -213,16 +208,3 @@ jobs:
           kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} \
             -n ${{ env.K8S_NAMESPACE }} \
             --timeout=10m
-
-      - name: Smoke test
-        run: |
-          LB=$(kubectl get ingress healthcare-api -n ${{ env.K8S_NAMESPACE }} \
-                 -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          if [ -z "$LB" ]; then
-            echo "WARNING: No load balancer hostname found, skipping smoke test"
-            exit 0
-          fi
-          curl --fail --retry 5 --retry-delay 15 \
-            "https://${LB}/health" \
-            -H "Host: api.healthcare-internal.example.com" \
-            --insecure

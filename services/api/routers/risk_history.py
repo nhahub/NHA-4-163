@@ -11,7 +11,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from libs.common.models.prediction_log import PredictionLog
 from services.api.db import DbSession
@@ -47,10 +47,7 @@ async def get_risk_history(
     Returns:
         List of prediction log entries, newest first.
     """
-    query = (
-        select(PredictionLog)
-        .where(PredictionLog.patient_id == patient_id)
-    )
+    query = select(PredictionLog).where(PredictionLog.patient_id == patient_id)
 
     if source:
         query = query.where(PredictionLog.source == source)
@@ -103,7 +100,9 @@ async def get_latest_risk(patient_id: uuid.UUID, db: DbSession) -> RiskHistoryEn
 async def get_risk_trend(
     patient_id: uuid.UUID,
     db: DbSession,
-    window: int = Query(default=10, ge=2, le=100, description="Number of recent predictions to analyze"),
+    window: int = Query(
+        default=10, ge=2, le=100, description="Number of recent predictions to analyze"
+    ),
 ) -> RiskTrendResponse:
     """Analyze the risk trend for a patient (improving/worsening/stable).
 

@@ -6,16 +6,18 @@ POST /predict/hereditary-risk
     family graph.  Returns SHAP explanations when requested.
 
 POST /predict/disease-from-symptoms
-    Returns a differential diagnosis ranked list from symptom codes.
-    Returns HTTP 503 when ENABLE_SYMPTOM_MODEL is not true.
+    Returns a ranked differential diagnosis from ICD-10/SNOMED symptom codes
+    using the knowledge-based model in ``differential_service``.  Enabled by
+    default; returns HTTP 503 only when ENABLE_SYMPTOM_MODEL=false.
 
 POST /predict/disease-from-prescription
-    Returns a differential diagnosis from current medication codes.
-    Returns HTTP 503 when ENABLE_SYMPTOM_MODEL is not true.
+    Returns likely underlying conditions from RxNorm medication codes.
+    Enabled by default; returns HTTP 503 only when ENABLE_SYMPTOM_MODEL=false.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import date
@@ -33,11 +35,32 @@ from services.api.schemas.requests import (
 )
 from services.api.schemas.responses import (
     DifferentialDiagnosisResponse,
+    DiseasePrediction,
     HeredityRiskResponse,
     SHAPContribution,
     _risk_tier,
 )
+from services.api.services.differential_service import (
+    MODEL_VERSION as DIFFERENTIAL_MODEL_VERSION,
+)
+from services.api.services.differential_service import (
+    infer_from_medications,
+    infer_from_symptoms,
+)
 from services.api.services.feature_service import compute_features
+from services.api.services.notification_service import evaluate_patient_notifications
+
+log = logging.getLogger(__name__)
+
+
+def _symptom_model_enabled() -> bool:
+    """Return whether the differential-diagnosis model is enabled.
+
+    The knowledge-based model ships ready-to-serve, so it is enabled unless an
+    operator explicitly sets ``ENABLE_SYMPTOM_MODEL=false``.
+    """
+    return os.environ.get("ENABLE_SYMPTOM_MODEL", "true").lower() != "false"
+
 
 router = APIRouter(prefix="/predict", tags=["predictions"])
 
@@ -110,11 +133,11 @@ async def predict_hereditary_risk(
             neo4j_password=n4j.password.get_secret_value(),
             as_of_date=feat_date,
         )
-    except LookupError:
+    except LookupError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Patient not found",
-        )
+            detail="Patient not found",
+        ) from exc
 
     # ── Inference ─────────────────────────────────────────────────────────────
     risk_score = await model.predict_proba(features)
@@ -125,8 +148,9 @@ async def predict_hereditary_risk(
         try:
             raw_shap = await model.shap_values(features, top_n=body.top_n_factors)
             shap_contributions = [SHAPContribution(**s) for s in raw_shap]
-        except Exception:
-            pass  # SHAP failure is non-fatal
+        except Exception as exc:
+            # SHAP failure is non-fatal — return the prediction without factors.
+            log.debug("SHAP computation failed: %s", exc)
 
     assert model.info is not None
     result = HeredityRiskResponse(
@@ -154,11 +178,19 @@ async def predict_hereditary_risk(
         model_name=result.model_name,
         model_version=result.model_version,
         feature_date=feat_date,
-        shap_top_factors=[s.model_dump() for s in result.top_risk_factors] if result.top_risk_factors else None,
+        shap_top_factors=(
+            [s.model_dump() for s in result.top_risk_factors] if result.top_risk_factors else None
+        ),
         source="api",
     )
     db.add(prediction_log)
     await db.flush()
+
+    # ── Risk-threshold notifications (non-fatal) ──────────────────────────────
+    try:
+        await evaluate_patient_notifications(db, body.patient_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("Notification evaluation failed for %s: %s", patient_id, exc)
 
     return result
 
@@ -192,12 +224,12 @@ async def predict_from_symptoms(
     Raises:
         HTTPException 503: When ENABLE_SYMPTOM_MODEL is not true.
     """
-    if os.environ.get("ENABLE_SYMPTOM_MODEL", "false").lower() != "true":
+    if not _symptom_model_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Symptom-based prediction model is not available in this deployment. "
-                "Set ENABLE_SYMPTOM_MODEL=true and ensure the model is trained."
+                "Symptom-based prediction model is disabled in this deployment "
+                "(ENABLE_SYMPTOM_MODEL=false)."
             ),
         )
 
@@ -211,12 +243,25 @@ async def predict_from_symptoms(
         cached["request_id"] = request_id
         return DifferentialDiagnosisResponse(**cached)
 
-    # Placeholder: real implementation uses a trained multi-label classifier
-    # (Phase 5 GNN or a dedicated symptom model)
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Symptom model loaded but inference not yet implemented.",
+    predictions = [
+        DiseasePrediction(disease_code=code, disease_name=name, probability=prob)
+        for code, name, prob in infer_from_symptoms(body.symptom_codes, top_n=body.top_n)
+    ]
+    result = DifferentialDiagnosisResponse(
+        request_id=uuid.UUID(request_id),
+        patient_id=body.patient_id,
+        input_codes=body.symptom_codes,
+        input_type="symptoms",
+        predictions=predictions,
+        model_version=DIFFERENTIAL_MODEL_VERSION,
+        cached=False,
     )
+
+    payload = result.model_dump(mode="json")
+    payload.pop("request_id", None)
+    await cache.set_json(cache_key, payload, cache.TTL_PREDICTION)
+
+    return result
 
 
 @router.post(
@@ -246,12 +291,12 @@ async def predict_from_prescription(
     Raises:
         HTTPException 503: When the model is not available.
     """
-    if os.environ.get("ENABLE_SYMPTOM_MODEL", "false").lower() != "true":
+    if not _symptom_model_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Prescription-based prediction model is not available. "
-                "Set ENABLE_SYMPTOM_MODEL=true."
+                "Prescription-based prediction model is disabled in this "
+                "deployment (ENABLE_SYMPTOM_MODEL=false)."
             ),
         )
 
@@ -265,7 +310,22 @@ async def predict_from_prescription(
         cached["request_id"] = request_id
         return DifferentialDiagnosisResponse(**cached)
 
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Prescription model loaded but inference not yet implemented.",
+    predictions = [
+        DiseasePrediction(disease_code=code, disease_name=name, probability=prob)
+        for code, name, prob in infer_from_medications(body.medication_codes, top_n=body.top_n)
+    ]
+    result = DifferentialDiagnosisResponse(
+        request_id=uuid.UUID(request_id),
+        patient_id=body.patient_id,
+        input_codes=body.medication_codes,
+        input_type="prescriptions",
+        predictions=predictions,
+        model_version=DIFFERENTIAL_MODEL_VERSION,
+        cached=False,
     )
+
+    payload = result.model_dump(mode="json")
+    payload.pop("request_id", None)
+    await cache.set_json(cache_key, payload, cache.TTL_PREDICTION)
+
+    return result

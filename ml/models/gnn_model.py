@@ -125,7 +125,7 @@ class GraphSAGEModel(nn.Module if _TORCH_AVAILABLE else object):  # type: ignore
         Returns:
             1-D tensor of shape (num_nodes,) with probabilities in [0, 1].
         """
-        for conv, bn in zip(self.convs, self.bns):
+        for conv, bn in zip(self.convs, self.bns, strict=False):
             x = conv(x, edge_index)
             x = bn(x)
             x = F.relu(x)

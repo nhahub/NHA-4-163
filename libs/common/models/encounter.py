@@ -11,9 +11,9 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Table, Column
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from libs.common.models.physician import Physician
 
 
-class EncounterStatus(str, enum.Enum):
+class EncounterStatus(enum.StrEnum):
     """FHIR Encounter status value set."""
 
     PLANNED = "planned"
@@ -87,35 +87,33 @@ class Encounter(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
 
     # ── FHIR Encounter.class ──────────────────────────────────────────────────
     # HL7 v3 ActCode: AMB, IMP, EMER, HH, etc.
-    encounter_class: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    encounter_class: Mapped[str | None] = mapped_column(String(20), index=True)
 
     # ── FHIR Encounter.type ───────────────────────────────────────────────────
-    type_code: Mapped[Optional[str]] = mapped_column(String(100))
-    type_display: Mapped[Optional[str]] = mapped_column(String(255))
+    type_code: Mapped[str | None] = mapped_column(String(100))
+    type_display: Mapped[str | None] = mapped_column(String(255))
 
     # ── FHIR Encounter.serviceType ────────────────────────────────────────────
-    service_type: Mapped[Optional[str]] = mapped_column(String(255))
+    service_type: Mapped[str | None] = mapped_column(String(255))
 
     # ── FHIR Encounter.period ─────────────────────────────────────────────────
     period_start: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    period_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # ── FHIR Encounter.location ───────────────────────────────────────────────
-    facility_name: Mapped[Optional[str]] = mapped_column(String(255))
-    facility_id: Mapped[Optional[str]] = mapped_column(String(255))
+    facility_name: Mapped[str | None] = mapped_column(String(255))
+    facility_id: Mapped[str | None] = mapped_column(String(255))
 
     # ── Full FHIR resource (for FHIR API pass-through) ────────────────────────
-    resource_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    resource_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    patient: Mapped["Patient"] = relationship(back_populates="encounters")
-    participants: Mapped[list["Physician"]] = relationship(
+    patient: Mapped[Patient] = relationship(back_populates="encounters")
+    participants: Mapped[list[Physician]] = relationship(
         secondary=encounter_participant, back_populates="encounters"
     )
-    conditions: Mapped[list["Condition"]] = relationship(back_populates="encounter")
-    observations: Mapped[list["Observation"]] = relationship(back_populates="encounter")
-    medication_requests: Mapped[list["MedicationRequest"]] = relationship(
-        back_populates="encounter"
-    )
+    conditions: Mapped[list[Condition]] = relationship(back_populates="encounter")
+    observations: Mapped[list[Observation]] = relationship(back_populates="encounter")
+    medication_requests: Mapped[list[MedicationRequest]] = relationship(back_populates="encounter")

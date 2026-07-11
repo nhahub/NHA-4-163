@@ -80,7 +80,8 @@ async def ready(request: Request) -> JSONResponse:
     # ── PostgreSQL ────────────────────────────────────────────────────────────
     t0 = time.monotonic()
     try:
-        import asyncio, psycopg2
+        import asyncio
+
         await asyncio.to_thread(_ping_postgres, settings.postgres.sync_dsn)
         components["postgres"] = ComponentStatus(
             status="ok", latency_ms=round((time.monotonic() - t0) * 1000, 1)
@@ -93,6 +94,7 @@ async def ready(request: Request) -> JSONResponse:
     t0 = time.monotonic()
     try:
         import asyncio
+
         await asyncio.to_thread(
             _ping_neo4j,
             settings.neo4j.uri,
@@ -125,6 +127,7 @@ async def ready(request: Request) -> JSONResponse:
 
 
 # ── Sync helpers (run in thread pool) ────────────────────────────────────────
+
 
 def _ping_postgres(dsn: str) -> None:
     import psycopg2

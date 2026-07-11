@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 
 log = logging.getLogger(__name__)
 
@@ -182,10 +182,17 @@ class Neo4jWriter:
 
         # Map HL7 codes → Neo4j relationship types for the most common cases.
         _HL7_TO_REL = {
-            "MTH": "PARENT_OF", "FTH": "PARENT_OF",
-            "CHILD": "CHILD_OF", "SON": "CHILD_OF", "DAU": "CHILD_OF",
-            "SIB": "SIBLING_OF", "BRO": "SIBLING_OF", "SIS": "SIBLING_OF",
-            "HUSB": "SPOUSE_OF", "WIFE": "SPOUSE_OF", "SPS": "SPOUSE_OF",
+            "MTH": "PARENT_OF",
+            "FTH": "PARENT_OF",
+            "CHILD": "CHILD_OF",
+            "SON": "CHILD_OF",
+            "DAU": "CHILD_OF",
+            "SIB": "SIBLING_OF",
+            "BRO": "SIBLING_OF",
+            "SIS": "SIBLING_OF",
+            "HUSB": "SPOUSE_OF",
+            "WIFE": "SPOUSE_OF",
+            "SPS": "SPOUSE_OF",
         }
 
         for hl7_code, rel_type in _HL7_TO_REL.items():
@@ -207,7 +214,7 @@ class Neo4jWriter:
             )
 
     @classmethod
-    def from_settings(cls, settings: Any) -> "Neo4jWriter":
+    def from_settings(cls, settings: Any) -> Neo4jWriter:
         """Construct from the project Settings object.
 
         Args:

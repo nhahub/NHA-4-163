@@ -202,6 +202,7 @@ async def update_patient(
 @router.delete(
     "/{patient_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Soft-delete patient",
 )
 async def delete_patient(patient_id: uuid.UUID, db: DbSession) -> None:
@@ -248,9 +249,7 @@ async def get_patient_summary(patient_id: uuid.UUID, db: DbSession) -> PatientSu
         raise HTTPException(status_code=404, detail="Patient not found")
 
     # Conditions
-    cond_result = await db.execute(
-        select(Condition).where(Condition.patient_id == patient_id)
-    )
+    cond_result = await db.execute(select(Condition).where(Condition.patient_id == patient_id))
     conditions = cond_result.scalars().all()
 
     # Medications

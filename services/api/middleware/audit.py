@@ -35,7 +35,7 @@ import logging
 import re
 import time
 import uuid
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -104,6 +104,7 @@ def _extract_actor(request: Request) -> tuple[str, str]:
         return "anonymous", "anonymous"
     try:
         import jwt as pyjwt
+
         token = auth[7:]
         payload = pyjwt.decode(token, options={"verify_signature": False})
         return str(payload.get("sub", "anonymous")), "service_account"

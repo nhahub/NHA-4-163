@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -46,9 +47,7 @@ class PredictionLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     # ── Prediction results ────────────────────────────────────────────────────
-    risk_score: Mapped[float] = mapped_column(
-        Numeric(precision=6, scale=5), nullable=False
-    )
+    risk_score: Mapped[float] = mapped_column(Numeric(precision=6, scale=5), nullable=False)
     risk_tier: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
 
     # ── Model metadata ────────────────────────────────────────────────────────
@@ -57,12 +56,10 @@ class PredictionLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     feature_date: Mapped[str] = mapped_column(String(10), nullable=False)
 
     # ── SHAP explanations ─────────────────────────────────────────────────────
-    shap_top_factors: Mapped[dict | None] = mapped_column(JSONB, default=None)
+    shap_top_factors: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
 
     # ── Source ────────────────────────────────────────────────────────────────
-    source: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="api", index=True
-    )
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="api", index=True)
 
     # ── Temporal ──────────────────────────────────────────────────────────────
     predicted_at: Mapped[datetime] = mapped_column(

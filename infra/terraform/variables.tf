@@ -1,9 +1,9 @@
 # ── Global ─────────────────────────────────────────────────────────────────────
 
-variable "aws_region" {
-  description = "AWS region for all resources."
+variable "location" {
+  description = "Azure region for all resources (e.g. eastus, westeurope)."
   type        = string
-  default     = "us-east-1"
+  default     = "eastus"
 }
 
 variable "environment" {
@@ -24,130 +24,106 @@ variable "project" {
 
 # ── Networking ─────────────────────────────────────────────────────────────────
 
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
+variable "vnet_cidr" {
+  description = "Address space for the virtual network."
   type        = string
   default     = "10.0.0.0/16"
 }
 
-variable "availability_zones" {
-  description = "List of AZs to use (must be ≥ 2 for EKS + RDS)."
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+variable "aks_subnet_cidr" {
+  description = "Subnet CIDR for the AKS node pool."
+  type        = string
+  default     = "10.0.1.0/24"
 }
 
-# ── EKS ────────────────────────────────────────────────────────────────────────
+variable "data_subnet_cidr" {
+  description = "Subnet CIDR for the managed data services (Postgres, Redis)."
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
+# ── AKS ────────────────────────────────────────────────────────────────────────
 
 variable "kubernetes_version" {
-  description = "Kubernetes version for the EKS cluster."
+  description = "Kubernetes version for the AKS cluster."
   type        = string
   default     = "1.29"
 }
 
-variable "node_instance_types" {
-  description = "EC2 instance types for the EKS managed node group."
-  type        = list(string)
-  default     = ["t3.large"]
+variable "node_vm_size" {
+  description = "VM size for the AKS default node pool."
+  type        = string
+  default     = "Standard_D2s_v5"
 }
 
-variable "node_min_size" {
-  description = "Minimum number of EKS worker nodes."
+variable "node_min_count" {
+  description = "Minimum number of AKS nodes (cluster autoscaler)."
   type        = number
   default     = 2
 }
 
-variable "node_max_size" {
-  description = "Maximum number of EKS worker nodes."
+variable "node_max_count" {
+  description = "Maximum number of AKS nodes (cluster autoscaler)."
   type        = number
   default     = 6
 }
 
-variable "node_desired_size" {
-  description = "Desired number of EKS worker nodes."
-  type        = number
-  default     = 3
-}
+# ── Azure Database for PostgreSQL ──────────────────────────────────────────────
 
-# ── RDS PostgreSQL ─────────────────────────────────────────────────────────────
-
-variable "rds_instance_class" {
-  description = "RDS instance type for PostgreSQL."
+variable "postgres_sku_name" {
+  description = "SKU name for the PostgreSQL Flexible Server (e.g. B_Standard_B1ms, GP_Standard_D2s_v3)."
   type        = string
-  default     = "db.t3.medium"
+  default     = "B_Standard_B1ms"
 }
 
-variable "rds_allocated_storage_gb" {
-  description = "Initial allocated storage for RDS in GiB."
+variable "postgres_storage_mb" {
+  description = "Storage for the PostgreSQL Flexible Server in MB."
   type        = number
-  default     = 50
+  default     = 32768
 }
 
-variable "rds_max_allocated_storage_gb" {
-  description = "Maximum storage for RDS autoscaling in GiB."
-  type        = number
-  default     = 200
-}
-
-variable "rds_postgres_version" {
-  description = "PostgreSQL engine version."
+variable "postgres_version" {
+  description = "PostgreSQL major version."
   type        = string
-  default     = "15.6"
+  default     = "15"
 }
 
-variable "rds_database_name" {
+variable "postgres_database_name" {
   description = "Name of the initial database."
   type        = string
   default     = "healthcare"
 }
 
-variable "rds_username" {
-  description = "Master username for the RDS instance."
+variable "postgres_admin_username" {
+  description = "Administrator username for the PostgreSQL server."
   type        = string
   default     = "healthcare_app"
 }
 
-variable "rds_multi_az" {
-  description = "Enable Multi-AZ deployment for RDS (recommended for production)."
-  type        = bool
-  default     = false
-}
+# ── Azure Cache for Redis ──────────────────────────────────────────────────────
 
-variable "rds_deletion_protection" {
-  description = "Enable RDS deletion protection."
-  type        = bool
-  default     = true
-}
-
-# ── ElastiCache Redis ──────────────────────────────────────────────────────────
-
-variable "redis_node_type" {
-  description = "ElastiCache node type."
-  type        = string
-  default     = "cache.t3.small"
-}
-
-variable "redis_engine_version" {
-  description = "Redis engine version."
-  type        = string
-  default     = "7.1"
-}
-
-variable "redis_num_cache_nodes" {
-  description = "Number of cache nodes (1 = single-node, >1 = cluster)."
+variable "redis_capacity" {
+  description = "Redis cache size (0-6 for Basic/Standard, 1-5 for Premium)."
   type        = number
-  default     = 1
+  default     = 0
 }
 
-# ── ECR ────────────────────────────────────────────────────────────────────────
-
-variable "ecr_image_tag_mutability" {
-  description = "Image tag mutability: MUTABLE or IMMUTABLE."
+variable "redis_family" {
+  description = "Redis SKU family: C (Basic/Standard) or P (Premium)."
   type        = string
-  default     = "IMMUTABLE"
+  default     = "C"
 }
 
-variable "ecr_image_retention_count" {
-  description = "Number of tagged images to keep in ECR before pruning older ones."
-  type        = number
-  default     = 30
+variable "redis_sku_name" {
+  description = "Redis SKU: Basic, Standard, or Premium."
+  type        = string
+  default     = "Basic"
+}
+
+# ── Azure Container Registry ───────────────────────────────────────────────────
+
+variable "acr_sku" {
+  description = "Container registry SKU: Basic, Standard, or Premium."
+  type        = string
+  default     = "Basic"
 }

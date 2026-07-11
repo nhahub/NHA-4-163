@@ -28,7 +28,7 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth2 token type, not a secret
     expires_in: int = Field(..., description="Token lifetime in seconds")
     role: str = Field(..., description="Role granted to this token")
 

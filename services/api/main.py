@@ -34,8 +34,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,14 +48,30 @@ from services.api.middleware.rate_limit import RateLimitMiddleware
 from services.api.routers import health, patients, predictions
 from services.api.routers.auth import router as auth_router
 from services.api.routers.batch_screening import router as batch_screening_router
+from services.api.routers.cascade import router as cascade_router
 from services.api.routers.conditions import router as conditions_router
+from services.api.routers.consent import router as consent_router
 from services.api.routers.encounters import router as encounters_router
+from services.api.routers.export import router as export_router
 from services.api.routers.family import router as family_router
+from services.api.routers.fhir import router as fhir_router
+from services.api.routers.genetics import router as genetics_router
+from services.api.routers.guidelines import router as guidelines_router
+from services.api.routers.import_data import router as import_router
+from services.api.routers.inheritance import router as inheritance_router
 from services.api.routers.medications import router as medications_router
 from services.api.routers.metrics_router import router as metrics_router
+from services.api.routers.monitoring import router as monitoring_router
+from services.api.routers.notifications import router as notifications_router
 from services.api.routers.observations import router as observations_router
+from services.api.routers.organizations import router as organizations_router
 from services.api.routers.patient_crud import router as patient_crud_router
+from services.api.routers.pedigree import router as pedigree_router
+from services.api.routers.portal import router as portal_router
+from services.api.routers.prs import router as prs_router
+from services.api.routers.reports import router as reports_router
 from services.api.routers.risk_history import router as risk_history_router
+from services.api.routers.whatif import router as whatif_router
 from services.api.services.cache_service import CacheService
 from services.api.services.model_service import ModelService
 
@@ -93,7 +109,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     import redis.asyncio as aioredis
 
     log.info("Connecting to Redis at %s:%d", settings.redis.host, settings.redis.port)
-    redis_client: aioredis.Redis = aioredis.from_url(  # type: ignore[type-arg]
+    redis_client: aioredis.Redis = aioredis.from_url(  # type: ignore[no-untyped-call]
         settings.redis.url,
         encoding="utf-8",
         decode_responses=True,
@@ -153,9 +169,7 @@ def create_app() -> FastAPI:
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     origins = (
-        ["*"]
-        if settings.app.env == "development"
-        else ["https://healthcare-internal.example.com"]
+        ["*"] if settings.app.env == "development" else ["https://healthcare-internal.example.com"]
     )
     app.add_middleware(
         CORSMiddleware,
@@ -175,19 +189,35 @@ def create_app() -> FastAPI:
     app.add_middleware(PrometheusMetricsMiddleware)
 
     # ── Routers ───────────────────────────────────────────────────────────────
-    app.include_router(metrics_router)   # /metrics — no auth, excluded from audit
+    app.include_router(metrics_router)  # /metrics — no auth, excluded from audit
     app.include_router(auth_router)
     app.include_router(health.router)
     app.include_router(predictions.router)
     app.include_router(patients.router)
-    app.include_router(patient_crud_router)   # Patient CRUD
-    app.include_router(conditions_router)     # Condition CRUD
-    app.include_router(family_router)         # Family relationship CRUD
-    app.include_router(medications_router)    # Medication CRUD
-    app.include_router(encounters_router)     # Encounter/visit CRUD
-    app.include_router(observations_router)   # Observations/vitals CRUD
-    app.include_router(batch_screening_router) # Batch risk screening
-    app.include_router(risk_history_router)   # Risk history & trends
+    app.include_router(patient_crud_router)  # Patient CRUD
+    app.include_router(conditions_router)  # Condition CRUD
+    app.include_router(family_router)  # Family relationship CRUD
+    app.include_router(medications_router)  # Medication CRUD
+    app.include_router(encounters_router)  # Encounter/visit CRUD
+    app.include_router(observations_router)  # Observations/vitals CRUD
+    app.include_router(batch_screening_router)  # Batch risk screening
+    app.include_router(risk_history_router)  # Risk history & trends
+    app.include_router(reports_router)  # Clinical PDF reports (Tier 3)
+    app.include_router(fhir_router)  # FHIR R4 interoperability (Tier 3)
+    app.include_router(export_router)  # De-identified research export (Tier 3)
+    app.include_router(import_router)  # Bulk CSV import (Tier 3)
+    app.include_router(notifications_router)  # Risk & workflow notifications (Tier 4)
+    app.include_router(organizations_router)  # Multi-tenant organizations (Tier 4)
+    app.include_router(inheritance_router)  # Mendelian inheritance calculator (Tier 5)
+    app.include_router(cascade_router)  # Cascade screening workflow (Tier 5)
+    app.include_router(genetics_router)  # Genetic test ingestion (Tier 5)
+    app.include_router(prs_router)  # Polygenic risk score integration (Tier 5)
+    app.include_router(whatif_router)  # What-if risk simulator (Tier 6)
+    app.include_router(monitoring_router)  # Model monitoring & fairness (Tier 6)
+    app.include_router(guidelines_router)  # Guideline screening recommendations (Tier 6)
+    app.include_router(pedigree_router)  # Pedigree link prediction (Tier 6)
+    app.include_router(consent_router)  # Granular patient consent (Tier 7)
+    app.include_router(portal_router)  # SMART on FHIR patient portal (Tier 7)
 
     return app
 

@@ -20,7 +20,7 @@ only computes, not logs.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from sklearn.calibration import calibration_curve
@@ -124,7 +124,7 @@ def expected_calibration_error(
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
     ece = 0.0
     n = len(y_true)
-    for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+    for lo, hi in zip(bin_edges[:-1], bin_edges[1:], strict=False):
         mask = (y_proba >= lo) & (y_proba < hi)
         if mask.sum() == 0:
             continue
@@ -186,6 +186,9 @@ def evaluate_binary_classifier(
 
     log.info(
         "Eval — ROC-AUC: %.4f  PR-AUC: %.4f  Brier: %.4f  ECE: %.4f",
-        result.roc_auc, result.pr_auc, result.brier_score, result.ece,
+        result.roc_auc,
+        result.pr_auc,
+        result.brier_score,
+        result.ece,
     )
     return result

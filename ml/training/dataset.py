@@ -12,7 +12,7 @@ Data flow
 from __future__ import annotations
 
 import logging
-from typing import Any, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,10 +36,11 @@ _NULLABLE_NUMERIC_COLS: list[str] = [
 
 # ── Synthetic data for development ────────────────────────────────────────────
 
+
 def create_synthetic_dataset(
     n_patients: int = 500,
     random_state: int = 42,
-) -> Tuple[pd.DataFrame, pd.Series]:
+) -> tuple[pd.DataFrame, pd.Series]:
     """Create synthetic patient features and labels.
 
     Args:
@@ -52,21 +53,23 @@ def create_synthetic_dataset(
     """
     np.random.seed(random_state)
 
-    X = pd.DataFrame({
-        "patient_id": np.arange(n_patients),
-        "age_years": np.random.randint(18, 85, n_patients),
-        "gender_male": np.random.randint(0, 2, n_patients),
-        "gender_female": np.random.randint(0, 2, n_patients),
-        "comorbidity_count": np.random.randint(0, 10, n_patients),
-        "hereditary_condition_count": np.random.randint(0, 5, n_patients),
-        "has_cardiovascular": np.random.randint(0, 2, n_patients),
-        "has_metabolic": np.random.randint(0, 2, n_patients),
-        "has_neurological": np.random.randint(0, 2, n_patients),
-        "has_oncological": np.random.randint(0, 2, n_patients),
-        "active_medication_count": np.random.randint(0, 15, n_patients),
-        "shortest_path_to_affected": np.random.randint(-1, 5, n_patients),
-        "family_risk_prevalence": np.random.uniform(0, 1, n_patients),
-    })
+    X = pd.DataFrame(
+        {
+            "patient_id": np.arange(n_patients),
+            "age_years": np.random.randint(18, 85, n_patients),
+            "gender_male": np.random.randint(0, 2, n_patients),
+            "gender_female": np.random.randint(0, 2, n_patients),
+            "comorbidity_count": np.random.randint(0, 10, n_patients),
+            "hereditary_condition_count": np.random.randint(0, 5, n_patients),
+            "has_cardiovascular": np.random.randint(0, 2, n_patients),
+            "has_metabolic": np.random.randint(0, 2, n_patients),
+            "has_neurological": np.random.randint(0, 2, n_patients),
+            "has_oncological": np.random.randint(0, 2, n_patients),
+            "active_medication_count": np.random.randint(0, 15, n_patients),
+            "shortest_path_to_affected": np.random.randint(-1, 5, n_patients),
+            "family_risk_prevalence": np.random.uniform(0, 1, n_patients),
+        }
+    )
 
     # Generate labels with signal
     risk_score = (
@@ -84,7 +87,7 @@ def create_synthetic_dataset(
 def load_feature_data(
     n_patients: int = 500,
     random_state: int = 42,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """Load or generate features and split by patient to prevent leakage.
 
     Used by the Streamlit UI for interactive evaluation. Generates synthetic
@@ -123,6 +126,7 @@ def load_feature_data(
 
 
 # ── Feature loading (production) ─────────────────────────────────────────────
+
 
 def load_feature_vector(
     source: str | pd.DataFrame,
@@ -166,6 +170,7 @@ def load_feature_vector(
 
 # ── Label loading ─────────────────────────────────────────────────────────────
 
+
 def load_labels(dsn: str) -> pd.DataFrame:
     """Load binary hereditary-disease labels from PostgreSQL.
 
@@ -192,8 +197,8 @@ def load_labels(dsn: str) -> pd.DataFrame:
                 ) > 0 THEN 1
                 ELSE 0
             END AS label
-        FROM patients p
-        LEFT JOIN conditions c ON c.patient_id = p.id
+        FROM patient p
+        LEFT JOIN condition c ON c.patient_id = p.id
         WHERE p.deleted_at IS NULL
         GROUP BY p.id
     """
@@ -212,6 +217,7 @@ def load_labels(dsn: str) -> pd.DataFrame:
 
 
 # ── Dataset assembly ──────────────────────────────────────────────────────────
+
 
 def build_dataset(
     features_df: pd.DataFrame,
@@ -266,6 +272,7 @@ def build_dataset(
 
 # ── Train / val / test split ──────────────────────────────────────────────────
 
+
 def patient_id_split(
     patient_ids: np.ndarray,
     labels: np.ndarray,
@@ -293,7 +300,8 @@ def patient_id_split(
     y_unique = labels[idx]
 
     trainval_ids, test_ids, trainval_y, _ = train_test_split(
-        ids, y_unique,
+        ids,
+        y_unique,
         test_size=test_size,
         stratify=y_unique,
         random_state=random_state,
@@ -307,7 +315,9 @@ def patient_id_split(
     )
     log.info(
         "Split — train: %d  val: %d  test: %d",
-        len(train_ids), len(val_ids), len(test_ids),
+        len(train_ids),
+        len(val_ids),
+        len(test_ids),
     )
     return train_ids, val_ids, test_ids
 
@@ -334,6 +344,7 @@ def apply_split(
 
 
 # ── PyG graph construction (GNN only) ────────────────────────────────────────
+
 
 def build_pyg_data(
     X: np.ndarray,

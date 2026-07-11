@@ -49,65 +49,127 @@ from typing import Any
 
 # ── Safe Harbor — fields to remove entirely ───────────────────────────────────
 
-_REMOVE_FIELDS: frozenset[str] = frozenset({
-    # (1) Names
-    "name", "first_name", "last_name", "middle_name", "patient_name",
-    "full_name", "display_name", "maiden_name",
-    # (2) Geographic < state
-    "address", "street", "street_address", "city", "county", "district",
-    # (4) Phone
-    "phone", "phone_number", "mobile", "telephone", "cell_phone",
-    # (5) Fax
-    "fax", "fax_number",
-    # (6) Email
-    "email", "email_address",
-    # (7) SSN
-    "ssn", "social_security", "social_security_number",
-    # (8) MRN
-    "mrn", "medical_record_number", "chart_number",
-    # (9) Health plan
-    "health_plan_id", "insurance_id", "member_id", "subscriber_id",
-    # (10) Account numbers
-    "account_number", "bank_account",
-    # (11) Certificate / license
-    "certificate_number", "license_number", "dea_number", "npi",
-    # (12) Vehicle
-    "vehicle_id", "vehicle_vin", "license_plate",
-    # (13) Device
-    "device_id", "device_serial", "imei", "mac_address",
-    # (14) URL
-    "url", "website",
-    # (15) IP address
-    "ip_address", "ip",
-    # (16) Biometric
-    "fingerprint", "voiceprint", "biometric",
-    # (17) Photo
-    "photo", "photo_url", "profile_picture",
-})
+_REMOVE_FIELDS: frozenset[str] = frozenset(
+    {
+        # (1) Names
+        "name",
+        "first_name",
+        "last_name",
+        "middle_name",
+        "patient_name",
+        "full_name",
+        "display_name",
+        "maiden_name",
+        # (2) Geographic < state
+        "address",
+        "street",
+        "street_address",
+        "city",
+        "county",
+        "district",
+        # (4) Phone
+        "phone",
+        "phone_number",
+        "mobile",
+        "telephone",
+        "cell_phone",
+        # (5) Fax
+        "fax",
+        "fax_number",
+        # (6) Email
+        "email",
+        "email_address",
+        # (7) SSN
+        "ssn",
+        "social_security",
+        "social_security_number",
+        # (8) MRN
+        "mrn",
+        "medical_record_number",
+        "chart_number",
+        # (9) Health plan
+        "health_plan_id",
+        "insurance_id",
+        "member_id",
+        "subscriber_id",
+        # (10) Account numbers
+        "account_number",
+        "bank_account",
+        # (11) Certificate / license
+        "certificate_number",
+        "license_number",
+        "dea_number",
+        "npi",
+        # (12) Vehicle
+        "vehicle_id",
+        "vehicle_vin",
+        "license_plate",
+        # (13) Device
+        "device_id",
+        "device_serial",
+        "imei",
+        "mac_address",
+        # (14) URL
+        "url",
+        "website",
+        # (15) IP address
+        "ip_address",
+        "ip",
+        # (16) Biometric
+        "fingerprint",
+        "voiceprint",
+        "biometric",
+        # (17) Photo
+        "photo",
+        "photo_url",
+        "profile_picture",
+    }
+)
 
 # ── Safe Harbor — fields to generalise (not remove) ──────────────────────────
 
 _ZIP_FIELDS: frozenset[str] = frozenset({"zip_code", "postal_code", "zip"})
-_DATE_FIELDS: frozenset[str] = frozenset({
-    "date_of_birth", "dob", "birth_date",
-    "admission_date", "discharge_date", "encounter_date",
-    "procedure_date", "service_date",
-})
+_DATE_FIELDS: frozenset[str] = frozenset(
+    {
+        "date_of_birth",
+        "dob",
+        "birth_date",
+        "admission_date",
+        "discharge_date",
+        "encounter_date",
+        "procedure_date",
+        "service_date",
+    }
+)
 _AGE_FIELDS: frozenset[str] = frozenset({"age_years", "age"})
 
 # ZIP codes where the 3-digit prefix applies to fewer than 20,000 people
 # must be replaced with "000" per Safe Harbor (45 CFR §164.514(b)(2)(i)(B)).
 # This set lists the restricted prefixes from the HHS guidance.
-_RESTRICTED_ZIP_PREFIXES: frozenset[str] = frozenset({
-    "036", "059", "102", "203", "556", "692", "821", "823", "878",
-    "879", "884", "890", "893",
-})
+_RESTRICTED_ZIP_PREFIXES: frozenset[str] = frozenset(
+    {
+        "036",
+        "059",
+        "102",
+        "203",
+        "556",
+        "692",
+        "821",
+        "823",
+        "878",
+        "879",
+        "884",
+        "890",
+        "893",
+    }
+)
 
 _SENTINEL = "[REDACTED]"
 _AGE_THRESHOLD = 90  # individuals ≥ 90 are a small population; generalise
 
 
 # ── ZIP generalisation ────────────────────────────────────────────────────────
+
 
 def generalise_zip(zip_code: str | None) -> str | None:
     """Generalise a ZIP code to its 3-digit prefix per HIPAA Safe Harbor.
@@ -134,6 +196,7 @@ def generalise_zip(zip_code: str | None) -> str | None:
 
 # ── Age generalisation ────────────────────────────────────────────────────────
 
+
 def generalise_age(age: int | None) -> str | None:
     """Generalise an age value.
 
@@ -158,6 +221,7 @@ def generalise_age(age: int | None) -> str | None:
 
 
 # ── Date generalisation ───────────────────────────────────────────────────────
+
 
 def generalise_date(
     value: str | date | datetime | None,
@@ -194,6 +258,7 @@ def generalise_date(
 
 
 # ── Main de-identification function ──────────────────────────────────────────
+
 
 def deidentify_patient(
     record: dict[str, Any],

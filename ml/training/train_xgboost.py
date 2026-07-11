@@ -32,7 +32,6 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
 
 import mlflow
 import mlflow.xgboost
@@ -64,6 +63,7 @@ _MODEL_NAME = "hereditary-risk-xgboost"
 
 
 # ── Optional Optuna HPO ───────────────────────────────────────────────────────
+
 
 def _run_hpo(
     X_train: np.ndarray,
@@ -131,6 +131,7 @@ def _run_hpo(
 
 # ── Training entry point ──────────────────────────────────────────────────────
 
+
 def train(
     feature_date: str,
     delta_base: str,
@@ -170,6 +171,7 @@ def train(
     train_ids, val_ids, test_ids = patient_id_split(patient_ids, y, val_size=0.15, test_size=0.15)
     # Carve calibration out of train_ids
     from sklearn.model_selection import train_test_split as _tts
+
     train_ids_final, cal_ids = _tts(
         train_ids,
         test_size=0.12,
@@ -184,7 +186,10 @@ def train(
 
     log.info(
         "Splits — train: %d  cal: %d  val: %d  test: %d",
-        len(X_train), len(X_cal), len(X_val), len(X_test),
+        len(X_train),
+        len(X_cal),
+        len(X_val),
+        len(X_test),
     )
 
     # ── MLflow run ────────────────────────────────────────────────────────────
@@ -209,13 +214,17 @@ def train(
 
         # ── Calibration ───────────────────────────────────────────────────────
         calibrated = calibrate(model.predict_proba, X_cal, y_cal, CalibrationMethod.SIGMOID)
-        mlflow.log_metrics({
-            "brier_before_calibration": calibrated.brier_before,
-            "brier_after_calibration": calibrated.brier_after,
-        })
+        mlflow.log_metrics(
+            {
+                "brier_before_calibration": calibrated.brier_before,
+                "brier_after_calibration": calibrated.brier_after,
+            }
+        )
 
         # ── Evaluation ────────────────────────────────────────────────────────
-        test_proba = calibrated.predict_proba(X_test)
+        # calibrated.predict_proba returns a 2-column [neg, pos] array; the
+        # evaluator expects 1-D positive-class probabilities.
+        test_proba = calibrated.predict_proba(X_test)[:, 1]
         eval_result = evaluate_binary_classifier(y_test, test_proba)
         mlflow.log_metrics(eval_result.to_mlflow_metrics())
 
@@ -237,8 +246,8 @@ def train(
 
         # ── SHAP ──────────────────────────────────────────────────────────────
         try:
-            import shap
             import matplotlib.pyplot as plt
+            import shap
 
             shap_vals = model.shap_values(X_test[:500])
             fig, _ = plt.subplots(figsize=(10, 8))
@@ -277,7 +286,10 @@ def train(
         )
         log.info(
             "Run complete — run_id=%s  ROC-AUC=%.4f  PR-AUC=%.4f  Brier=%.4f",
-            run_id, eval_result.roc_auc, eval_result.pr_auc, eval_result.brier_score,
+            run_id,
+            eval_result.roc_auc,
+            eval_result.pr_auc,
+            eval_result.brier_score,
         )
 
     return run_id

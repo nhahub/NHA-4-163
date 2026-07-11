@@ -43,8 +43,7 @@ _PATTERNS: list[tuple[str, str]] = [
 ]
 
 _COMPILED: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(pattern, re.IGNORECASE), replacement)
-    for pattern, replacement in _PATTERNS
+    (re.compile(pattern, re.IGNORECASE), replacement) for pattern, replacement in _PATTERNS
 ]
 
 
@@ -90,8 +89,11 @@ def redact_dict(data: dict[str, Any], phi_keys: frozenset[str] | None = None) ->
             result[key] = redact_dict(value, phi_keys)
         elif isinstance(value, list):
             result[key] = [
-                redact_dict(item, phi_keys) if isinstance(item, dict) else
-                redact_phi(str(item)) if isinstance(item, str) else item
+                (
+                    redact_dict(item, phi_keys)
+                    if isinstance(item, dict)
+                    else redact_phi(str(item)) if isinstance(item, str) else item
+                )
                 for item in value
             ]
         elif isinstance(value, str):
@@ -103,14 +105,39 @@ def redact_dict(data: dict[str, Any], phi_keys: frozenset[str] | None = None) ->
 
 _DEFAULT_PHI_KEYS: frozenset[str] = frozenset(
     {
-        "patient_id", "patient_name", "first_name", "last_name", "full_name",
-        "date_of_birth", "dob", "ssn", "social_security_number",
-        "address", "street_address", "city", "state", "zip_code", "postal_code",
-        "phone", "phone_number", "mobile", "email", "email_address",
-        "medical_record_number", "mrn", "national_id", "passport_number",
-        "insurance_id", "insurance_number", "account_number",
-        "diagnosis", "condition", "medication", "prescription",
-        "ip_address", "device_id",
+        "patient_id",
+        "patient_name",
+        "first_name",
+        "last_name",
+        "full_name",
+        "date_of_birth",
+        "dob",
+        "ssn",
+        "social_security_number",
+        "address",
+        "street_address",
+        "city",
+        "state",
+        "zip_code",
+        "postal_code",
+        "phone",
+        "phone_number",
+        "mobile",
+        "email",
+        "email_address",
+        "medical_record_number",
+        "mrn",
+        "national_id",
+        "passport_number",
+        "insurance_id",
+        "insurance_number",
+        "account_number",
+        "diagnosis",
+        "condition",
+        "medication",
+        "prescription",
+        "ip_address",
+        "device_id",
     }
 )
 
@@ -144,7 +171,6 @@ class PhiRedactingFilter(logging.Filter):
                 record.args = redact_dict(record.args)
             elif isinstance(record.args, tuple):
                 record.args = tuple(
-                    redact_phi(str(arg)) if isinstance(arg, str) else arg
-                    for arg in record.args
+                    redact_phi(str(arg)) if isinstance(arg, str) else arg for arg in record.args
                 )
         return True

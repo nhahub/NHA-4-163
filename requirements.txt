@@ -7,6 +7,10 @@ fastapi==0.110.3
 uvicorn[standard]==0.29.0
 pydantic==2.7.1
 pydantic-settings==2.2.1
+python-multipart==0.0.9
+
+# Reporting (Tier 3 — clinical PDF reports)
+fpdf2==2.7.9
 
 # Data & ML
 pandas==2.2.1
@@ -32,6 +36,7 @@ confluent-kafka==2.3.0
 
 # Security & Encryption
 cryptography==42.0.5
+PyJWT==2.8.0
 
 # Database Migrations
 alembic==1.13.1

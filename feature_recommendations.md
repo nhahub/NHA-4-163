@@ -271,3 +271,152 @@ services/streamlit/pages/patients.py    ← Streamlit UI page
 
 > [!WARNING]
 > Every new endpoint that accepts or returns PHI **must** be wrapped with the RBAC middleware from [rbac.py](file:///d:/Healthcare%20-%20Depi/services/api/auth/rbac.py) and logged via [audit_log.py](file:///d:/Healthcare%20-%20Depi/libs/common/models/audit_log.py).
+
+---
+
+# Beyond the Roadmap — Net-New Features
+
+> Tiers 1–4 above are largely built. The features below go beyond that roadmap and
+> target the one thing that makes this a *hereditary disease* platform: the genetics
+> engine, which is currently the thinnest part of the system. "Hereditary risk" is
+> today inferred only from family history + ML — there is no actual genetics layer.
+
+---
+
+### 🧬 Tier 5 — Genetics & Genomics (highest domain value)
+
+---
+
+#### 15. Mendelian Inheritance Calculator
+
+Given a pedigree and an affected proband, compute carrier/affected probabilities for
+each relative using inheritance mode (autosomal dominant/recessive, X-linked) plus
+penetrance. Deterministic and fully explainable — complements the ML model rather
+than competing with it.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/patients/{id}/inheritance-risk` | Compute Mendelian carrier/affected probabilities across the pedigree |
+| `GET` | `/inheritance/models` | List supported inheritance modes + penetrance defaults |
+
+- Reuses the `degree_of_relatedness` already stored on `FamilyMemberHistory`.
+- Bayesian carrier-risk propagation across the Neo4j family graph.
+- Output feeds the "what-if" simulator (#19) and the clinical report (#9).
+
+---
+
+#### 16. Cascade Screening Workflow ⭐ (highest clinical impact)
+
+When a patient is diagnosed with a hereditary condition, auto-generate a **ranked
+list of at-risk relatives** and produce outreach/screening tasks. This is *the*
+core clinical-genetics workflow and exercises infrastructure you already have.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/patients/{id}/cascade-screen` | Identify at-risk relatives for a proband's hereditary condition |
+| `GET` | `/patients/{id}/cascade-screen` | List generated screening tasks + outreach status |
+| `PUT` | `/cascade-tasks/{id}` | Update task status (contacted / screened / declined) |
+
+- Ranks relatives by `degree_of_relatedness` × condition penetrance.
+- Emits notifications via the existing notification service.
+- Every access logged through `AuditLog` (relatives are PHI).
+
+---
+
+#### 17. Genetic Test Result Ingestion
+
+Accept VCF files or lab reports, annotate variants against ClinVar/OMIM, and store
+pathogenicity classifications on the patient. Feeds both the ML pipeline
+(`is_hereditary`) and the Mendelian calculator (#15).
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/patients/{id}/genetic-tests` | Upload VCF / structured variant report |
+| `GET` | `/patients/{id}/genetic-tests` | List annotated variants + pathogenicity |
+
+- New ORM model: `GeneticTest` / `Variant`.
+- Variant annotation service (ClinVar/OMIM lookup) under `services/api/services/`.
+
+---
+
+#### 18. Polygenic Risk Score (PRS) Integration
+
+Combine the XGBoost/GNN output with published PRS for common diseases to produce a
+blended risk estimate. Track PRS panels in MLflow alongside existing models.
+
+---
+
+### 🤖 Tier 6 — ML Trust & Decision Support
+
+---
+
+#### 19. "What-If" Risk Simulator
+
+Let a clinician toggle a relative's disease status or add a condition and see risk
+recompute live. Pairs directly with the existing SHAP explanations.
+
+- Streamlit UI: interactive controls on the risk page that call `/predict/*` with
+  a modified in-memory patient graph (no writes to the DB).
+
+---
+
+#### 20. Model Monitoring & Fairness Dashboard
+
+Drift detection + risk-score parity across demographic groups (age / sex / ethnicity).
+Important for a regulated PHI system; complements the MLflow setup.
+
+- Reuses monitoring utilities under `ml/`.
+- Surfaces reliability diagrams + Brier score already required before model release.
+
+---
+
+#### 21. Guideline-Based Screening Recommendations
+
+Map predicted risk to established clinical criteria (NCCN BRCA/Lynch, colonoscopy
+age thresholds, etc.) and surface **actionable next steps** instead of a bare score.
+
+---
+
+#### 22. GNN Link Prediction for Pedigree Completion
+
+Use the graph model to suggest likely-missing family edges in Neo4j, helping
+clinicians complete incomplete pedigrees.
+
+---
+
+### 🔐 Tier 7 — Patient-Facing & Consent
+
+---
+
+#### 23. Consent Management
+
+Granular patient consent for research use / data sharing, **enforced at the export
+and de-identification layers** already in place.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/patients/{id}/consent` | Record/update consent scope |
+| `GET` | `/patients/{id}/consent` | Current consent state (checked before export) |
+
+---
+
+#### 24. Patient Portal (SMART on FHIR)
+
+Read-only patient view of their own risk profile and family tree, launched via
+SMART on FHIR so it plugs into Epic/Cerner. Builds on the FHIR R4 API (#10).
+
+---
+
+#### 25. Real-Time Streaming Risk Recomputation
+
+Wire a Kafka consumer so that a new condition or family edge triggers automatic risk
+recalculation + a notification. Uses the existing Kafka/Spark infrastructure and the
+notification service.
+
+---
+
+## Recommended Priority
+
+Start with **#16 (Cascade Screening)** and **#15 (Mendelian Calculator)** — highest
+clinical value, they reuse infrastructure you already have (family graph, relatedness,
+audit log, notifications), and they are what distinguish this from a generic EHR.

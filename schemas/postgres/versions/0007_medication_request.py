@@ -5,26 +5,38 @@ Revision ID: m0007
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "m0007"
-down_revision: Union[str, None] = "m0006"
+down_revision: str | None = "m0006"
 branch_labels = None
 depends_on = None
 
 _MR_STATUS = postgresql.ENUM(
-    "active", "on-hold", "cancelled", "completed",
-    "entered-in-error", "stopped", "draft", "unknown",
-    name="medication_request_status", create_type=True,
+    "active",
+    "on-hold",
+    "cancelled",
+    "completed",
+    "entered-in-error",
+    "stopped",
+    "draft",
+    "unknown",
+    name="medication_request_status",
+    create_type=False,
 )
 _MR_INTENT = postgresql.ENUM(
-    "proposal", "plan", "order", "original-order",
-    "reflex-order", "filler-order", "instance-order", "option",
-    name="medication_request_intent", create_type=True,
+    "proposal",
+    "plan",
+    "order",
+    "original-order",
+    "reflex-order",
+    "filler-order",
+    "instance-order",
+    "option",
+    name="medication_request_intent",
+    create_type=False,
 )
 
 
@@ -34,14 +46,28 @@ def upgrade() -> None:
 
     op.create_table(
         "medication_request",
-        sa.Column("id", postgresql.UUID(as_uuid=True),
-                  server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("patient_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("patient.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("encounter_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("encounter.id", ondelete="SET NULL")),
-        sa.Column("requester_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("physician.id", ondelete="SET NULL")),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "patient_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("patient.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "encounter_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("encounter.id", ondelete="SET NULL"),
+        ),
+        sa.Column(
+            "requester_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("physician.id", ondelete="SET NULL"),
+        ),
         sa.Column("status", _MR_STATUS, nullable=False),
         sa.Column("intent", _MR_INTENT, nullable=False),
         sa.Column("medication_code_system", sa.String(255)),
@@ -57,14 +83,30 @@ def upgrade() -> None:
         sa.Column("number_of_repeats", sa.Integer),
         sa.Column("authored_on", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resource_json", postgresql.JSONB),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(255)),
         sa.Column("updated_by", sa.String(255)),
     )
 
-    for col in ("patient_id", "encounter_id", "requester_id",
-                "status", "medication_code", "authored_on"):
+    for col in (
+        "patient_id",
+        "encounter_id",
+        "requester_id",
+        "status",
+        "medication_code",
+        "authored_on",
+    ):
         op.create_index(f"ix_medication_request_{col}", "medication_request", [col])
 
     # Composite: patient + med code — prescription history feature extraction.
@@ -74,13 +116,11 @@ def upgrade() -> None:
         ["patient_id", "medication_code"],
     )
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TRIGGER trg_medication_request_updated_at
         BEFORE UPDATE ON medication_request
         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

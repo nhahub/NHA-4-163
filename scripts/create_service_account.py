@@ -30,9 +30,9 @@ def _get_postgres_dsn(args_dsn: str | None) -> str:
         return args_dsn
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db   = os.environ.get("POSTGRES_DB", "healthcare")
+    db = os.environ.get("POSTGRES_DB", "healthcare")
     user = os.environ.get("POSTGRES_USER", "healthcare_app")
-    pw   = os.environ.get("POSTGRES_PASSWORD", "")
+    pw = os.environ.get("POSTGRES_PASSWORD", "")
     return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
 
 
@@ -72,7 +72,7 @@ def create_account(
         sys.exit(1)
 
     password = getpass.getpass(f"Password for '{username}': ")
-    confirm  = getpass.getpass("Confirm password: ")
+    confirm = getpass.getpass("Confirm password: ")
     if password != confirm:
         print("ERROR: Passwords do not match", file=sys.stderr)
         sys.exit(1)
@@ -181,12 +181,15 @@ def list_accounts(postgres_dsn: str) -> None:
     print("-" * 85)
     for r in rows:
         last = str(r["last_login_at"])[:16] if r["last_login_at"] else "never"
-        print(fmt.format(
-            r["username"], r["role"],
-            "yes" if r["is_active"] else "no",
-            str(r["created_at"])[:16],
-            last,
-        ))
+        print(
+            fmt.format(
+                r["username"],
+                r["role"],
+                "yes" if r["is_active"] else "no",
+                str(r["created_at"])[:16],
+                last,
+            )
+        )
 
 
 def main() -> None:
@@ -195,14 +198,18 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--postgres-dsn", default=None, help="PostgreSQL DSN (falls back to env vars)")
+    parser.add_argument(
+        "--postgres-dsn", default=None, help="PostgreSQL DSN (falls back to env vars)"
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     # create
     p_create = sub.add_parser("create", help="Create a new service account")
     p_create.add_argument("--username", required=True)
-    p_create.add_argument("--role", required=True, choices=["admin", "clinician", "researcher", "service"])
+    p_create.add_argument(
+        "--role", required=True, choices=["admin", "clinician", "researcher", "service"]
+    )
     p_create.add_argument("--force", action="store_true", help="Update if username already exists")
 
     # deactivate

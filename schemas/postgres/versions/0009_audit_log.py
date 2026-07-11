@@ -13,14 +13,12 @@ Revision ID: m0009
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "m0009"
-down_revision: Union[str, None] = "m0008"
+down_revision: str | None = "m0008"
 branch_labels = None
 depends_on = None
 
@@ -45,16 +43,23 @@ def upgrade() -> None:
             server_default=sa.text("NOW()"),
             nullable=False,
         ),
-        sa.Column("metadata", postgresql.JSONB, server_default="'{}'"),
+        sa.Column("metadata", postgresql.JSONB, server_default="{}"),
     )
 
-    for col in ("actor_id", "actor_type", "action", "resource_type",
-                "resource_id", "service_name", "outcome", "occurred_at"):
+    for col in (
+        "actor_id",
+        "actor_type",
+        "action",
+        "resource_type",
+        "resource_id",
+        "service_name",
+        "outcome",
+        "occurred_at",
+    ):
         op.create_index(f"ix_audit_log_{col}", "audit_log", [col])
 
     # Trigger: block any UPDATE or DELETE — audit records are immutable.
-    op.execute(
-        """
+    op.execute("""
         CREATE OR REPLACE FUNCTION enforce_audit_log_immutability()
         RETURNS TRIGGER
         LANGUAGE plpgsql
@@ -66,15 +71,12 @@ def upgrade() -> None:
                 TG_OP, OLD.id;
         END;
         $$;
-        """
-    )
-    op.execute(
-        """
+        """)
+    op.execute("""
         CREATE TRIGGER trg_audit_log_immutable
         BEFORE UPDATE OR DELETE ON audit_log
         FOR EACH ROW EXECUTE FUNCTION enforce_audit_log_immutability();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

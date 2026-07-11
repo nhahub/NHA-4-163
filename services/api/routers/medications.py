@@ -108,13 +108,9 @@ async def list_medications(
     query = select(MedicationRequest).where(MedicationRequest.patient_id == patient_id)
 
     if active_only:
-        query = query.where(
-            MedicationRequest.status == MedicationRequestStatus.ACTIVE
-        )
+        query = query.where(MedicationRequest.status == MedicationRequestStatus.ACTIVE)
     elif status_filter:
-        query = query.where(
-            MedicationRequest.status == MedicationRequestStatus(status_filter)
-        )
+        query = query.where(MedicationRequest.status == MedicationRequestStatus(status_filter))
 
     query = query.order_by(MedicationRequest.authored_on.desc())
     result = await db.execute(query)
@@ -165,6 +161,7 @@ async def update_medication(
 @router.delete(
     "/medications/{medication_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete a medication",
 )
 async def delete_medication(medication_id: uuid.UUID, db: DbSession) -> None:

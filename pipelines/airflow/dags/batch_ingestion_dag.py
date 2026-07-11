@@ -26,12 +26,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
-from airflow.operators.empty import EmptyOperator
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ DEFAULT_ARGS = {
     dag_id="batch_fhir_ingestion",
     description="Daily batch ingestion of FHIR bundles from MinIO → Postgres + Neo4j",
     schedule="0 2 * * *",
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
     default_args=DEFAULT_ARGS,
@@ -74,6 +73,7 @@ def batch_fhir_ingestion() -> None:
         """
         import boto3
         from airflow.exceptions import AirflowSkipException
+
         from libs.common.config import get_settings
 
         settings = get_settings()
@@ -119,12 +119,11 @@ def batch_fhir_ingestion() -> None:
         Returns:
             Dict with keys: ``success``, ``validated_count``, ``failures``.
         """
-        import json
 
         import boto3
 
         from libs.common.config import get_settings
-        from libs.common.quality import validate_patient_records, validate_diagnosis_records
+        from libs.common.quality import validate_diagnosis_records, validate_patient_records
 
         settings = get_settings()
         minio = settings.minio
@@ -190,8 +189,6 @@ def batch_fhir_ingestion() -> None:
             log.warning("Skipping Postgres load due to quality failures")
             return 0
 
-        import json
-
         import boto3
         import psycopg2
 
@@ -208,8 +205,11 @@ def batch_fhir_ingestion() -> None:
             aws_secret_access_key=minio.secret_key.get_secret_value(),
         )
         conn = psycopg2.connect(
-            host=pg.host, port=pg.port, dbname=pg.db,
-            user=pg.user, password=pg.password.get_secret_value(),
+            host=pg.host,
+            port=pg.port,
+            dbname=pg.db,
+            user=pg.user,
+            password=pg.password.get_secret_value(),
         )
 
         total = 0
@@ -221,8 +221,9 @@ def batch_fhir_ingestion() -> None:
                             obj = s3.get_object(Bucket=minio.bucket_raw, Key=key)
                             bundle = json.loads(obj["Body"].read())
                         except Exception as exc:
-                            log.warning("Skipping unreadable file",
-                                        extra={"key": key, "error": str(exc)})
+                            log.warning(
+                                "Skipping unreadable file", extra={"key": key, "error": str(exc)}
+                            )
                             continue
 
                         for entry in bundle.get("entry", []):
@@ -265,8 +266,11 @@ def batch_fhir_ingestion() -> None:
         neo4j_cfg = settings.neo4j
 
         conn = psycopg2.connect(
-            host=pg.host, port=pg.port, dbname=pg.db,
-            user=pg.user, password=pg.password.get_secret_value(),
+            host=pg.host,
+            port=pg.port,
+            dbname=pg.db,
+            user=pg.user,
+            password=pg.password.get_secret_value(),
         )
         driver = GraphDatabase.driver(
             neo4j_cfg.uri,
@@ -333,8 +337,11 @@ def batch_fhir_ingestion() -> None:
         settings = get_settings()
         pg = settings.postgres
         conn = psycopg2.connect(
-            host=pg.host, port=pg.port, dbname=pg.db,
-            user=pg.user, password=pg.password.get_secret_value(),
+            host=pg.host,
+            port=pg.port,
+            dbname=pg.db,
+            user=pg.user,
+            password=pg.password.get_secret_value(),
         )
 
         # Pull patients modified in the last 7 days
@@ -346,7 +353,7 @@ def batch_fhir_ingestion() -> None:
                 "AND deleted_at IS NULL LIMIT 50000"
             )
             cols = [d[0] for d in cur.description]
-            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+            rows = [dict(zip(cols, r, strict=False)) for r in cur.fetchall()]
         conn.close()
 
         if len(rows) < 2:
@@ -354,8 +361,7 @@ def batch_fhir_ingestion() -> None:
 
         # Minimal Spark session for identity resolution
         spark = (
-            SparkSession.builder
-            .appName("identity-resolution-airflow")
+            SparkSession.builder.appName("identity-resolution-airflow")
             .master("local[2]")
             .getOrCreate()
         )
@@ -384,6 +390,7 @@ def batch_fhir_ingestion() -> None:
 # FHIR → dict helpers (minimal, not a full FHIR parser)
 # ---------------------------------------------------------------------------
 
+
 def _fhir_patient_to_dict(resource: dict) -> dict:
     """Extract flat fields from a FHIR Patient resource."""
     name = (resource.get("name") or [{}])[0]
@@ -397,7 +404,7 @@ def _fhir_patient_to_dict(resource: dict) -> dict:
         "research_consent": False,
         "deceased": resource.get("deceasedBoolean", False),
         "event_id": resource.get("id", ""),
-        "event_timestamp": datetime.now(timezone.utc),
+        "event_timestamp": datetime.now(UTC),
         "source_system": "fhir-batch",
         "event_version": "1.0",
     }
@@ -412,7 +419,8 @@ def _fhir_condition_to_dict(resource: dict) -> dict:
         "condition_id": resource.get("id", ""),
         "patient_id": patient_id,
         "clinical_status": resource.get("clinicalStatus", {})
-                                    .get("coding", [{}])[0].get("code", "active"),
+        .get("coding", [{}])[0]
+        .get("code", "active"),
         "verification_status": None,
         "code_system": coding.get("system", ""),
         "code": coding.get("code", ""),
@@ -420,7 +428,7 @@ def _fhir_condition_to_dict(resource: dict) -> dict:
         "is_hereditary": False,
         "family_history_flag": False,
         "event_id": resource.get("id", ""),
-        "event_timestamp": datetime.now(timezone.utc),
+        "event_timestamp": datetime.now(UTC),
         "source_system": "fhir-batch",
         "event_version": "1.0",
     }
@@ -460,14 +468,25 @@ def _upsert_condition_pg(cur: Any, data: dict) -> None:
 
 
 def _merge_family_edge(
-    session: Any, patient_id: str, related_id: str, rel_code: str, degree: float | None
+    session: Any,
+    patient_id: str,
+    related_id: str,
+    rel_code: str,
+    degree: float | None,
 ) -> None:
     """MERGE a family relationship edge in Neo4j."""
     _HL7_MAP = {
-        "MTH": "PARENT_OF", "FTH": "PARENT_OF",
-        "CHILD": "CHILD_OF", "SON": "CHILD_OF", "DAU": "CHILD_OF",
-        "SIB": "SIBLING_OF", "BRO": "SIBLING_OF", "SIS": "SIBLING_OF",
-        "HUSB": "SPOUSE_OF", "WIFE": "SPOUSE_OF", "SPS": "SPOUSE_OF",
+        "MTH": "PARENT_OF",
+        "FTH": "PARENT_OF",
+        "CHILD": "CHILD_OF",
+        "SON": "CHILD_OF",
+        "DAU": "CHILD_OF",
+        "SIB": "SIBLING_OF",
+        "BRO": "SIBLING_OF",
+        "SIS": "SIBLING_OF",
+        "HUSB": "SPOUSE_OF",
+        "WIFE": "SPOUSE_OF",
+        "SPS": "SPOUSE_OF",
     }
     rel_type = _HL7_MAP.get(rel_code, "RELATED_TO")
     cypher = (

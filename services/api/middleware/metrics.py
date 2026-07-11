@@ -40,7 +40,7 @@ cardinality in Prometheus.
 from __future__ import annotations
 
 import time
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -91,12 +91,20 @@ try:
 
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
+
     # Stubs so callers that import these names don't crash
     class _Stub:
-        def labels(self, **_: object) -> "_Stub": return self
-        def inc(self, _: float = 1) -> None: pass
-        def observe(self, _: float) -> None: pass
-        def set(self, _: float) -> None: pass
+        def labels(self, **_: object) -> _Stub:
+            return self
+
+        def inc(self, _: float = 1) -> None:
+            pass
+
+        def observe(self, _: float) -> None:
+            pass
+
+        def set(self, _: float) -> None:
+            pass
 
     HTTP_REQUESTS = _Stub()  # type: ignore[assignment]
     HTTP_LATENCY = _Stub()  # type: ignore[assignment]

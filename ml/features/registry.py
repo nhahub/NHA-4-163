@@ -123,7 +123,5 @@ ALL_GROUPS: list[FeatureGroup] = [DEMOGRAPHICS, COMORBIDITIES, MEDICATIONS, GRAP
 
 # Flat lookup: feature column name → owning group name.
 FEATURE_TO_GROUP: dict[str, str] = {
-    col: grp.name
-    for grp in ALL_GROUPS
-    for col in grp.feature_columns
+    col: grp.name for grp in ALL_GROUPS for col in grp.feature_columns
 }

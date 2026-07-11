@@ -13,8 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from libs.common.phi import PhiRedactingFilter
@@ -24,7 +23,13 @@ class _JsonFormatter(logging.Formatter):
     """Formats log records as single-line JSON objects."""
 
     _DEFAULT_FIELDS: tuple[str, ...] = (
-        "name", "levelname", "pathname", "lineno", "funcName", "thread", "process",
+        "name",
+        "levelname",
+        "pathname",
+        "lineno",
+        "funcName",
+        "thread",
+        "process",
     )
 
     def format(self, record: logging.LogRecord) -> str:
@@ -37,7 +42,7 @@ class _JsonFormatter(logging.Formatter):
             A single-line JSON string terminated by ``\\n``.
         """
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -55,10 +60,28 @@ class _JsonFormatter(logging.Formatter):
 
         # Extra fields attached via logging.getLogger().info("msg", extra={...})
         skip = {
-            "message", "msg", "args", "created", "exc_info", "exc_text",
-            "filename", "funcName", "id", "levelname", "levelno", "lineno",
-            "module", "msecs", "name", "pathname", "process", "processName",
-            "relativeCreated", "stack_info", "thread", "threadName",
+            "message",
+            "msg",
+            "args",
+            "created",
+            "exc_info",
+            "exc_text",
+            "filename",
+            "funcName",
+            "id",
+            "levelname",
+            "levelno",
+            "lineno",
+            "module",
+            "msecs",
+            "name",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "stack_info",
+            "thread",
+            "threadName",
         }
         for key, value in record.__dict__.items():
             if key not in skip and not key.startswith("_"):

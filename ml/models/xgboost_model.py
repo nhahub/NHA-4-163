@@ -18,7 +18,7 @@ row-level splits cause data leakage.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -197,9 +197,9 @@ class HeredityXGBModel:
         scores = self._model.feature_importances_
         total = scores.sum()
         if total == 0:
-            return {name: 0.0 for name in self.feature_names}
+            return dict.fromkeys(self.feature_names, 0.0)
         normalized = scores / total
-        return dict(zip(self.feature_names, normalized.tolist()))
+        return dict(zip(self.feature_names, normalized.tolist(), strict=False))
 
     def params_dict(self) -> dict[str, Any]:
         """Return config as a flat dict suitable for MLflow log_params.

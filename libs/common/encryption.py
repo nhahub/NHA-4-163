@@ -31,7 +31,6 @@ logged, stored in source code, or included in API responses.
 
 from __future__ import annotations
 
-import base64
 import logging
 import os
 from functools import lru_cache
@@ -161,6 +160,7 @@ class EncryptionService:
             32-byte Fernet key encoded as URL-safe base64.
         """
         from cryptography.fernet import Fernet
+
         return Fernet.generate_key().decode("ascii")
 
 
@@ -181,8 +181,8 @@ def get_encryption_service() -> EncryptionService:
     if not key:
         raise EncryptionError(
             "ENCRYPTION_KEY environment variable is not set. "
-            "Generate one with: python -c \"from cryptography.fernet import Fernet; "
-            "print(Fernet.generate_key().decode())\""
+            'Generate one with: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
         )
     key_id = os.environ.get("ENCRYPTION_KEY_ID", _DEFAULT_KEY_ID)
     previous = os.environ.get("ENCRYPTION_PREVIOUS_KEY") or None

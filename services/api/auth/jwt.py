@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 def _jwt_settings() -> Any:
     """Lazy-load JWTSettings to avoid circular imports at module load time."""
     from libs.common.config import get_settings
+
     return get_settings().jwt
 
 
@@ -54,7 +55,7 @@ def create_access_token(user_id: str, role: str) -> tuple[str, int]:
     import jwt as pyjwt
 
     settings = _jwt_settings()
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     expire_seconds = settings.expire_minutes * 60
     exp = now + timedelta(seconds=expire_seconds)
 
@@ -102,14 +103,14 @@ def verify_token(token: str) -> UserClaims:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired — please re-authenticate",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except pyjwt.InvalidTokenError as exc:
         log.debug("JWT validation failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or malformed token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     return UserClaims(
         user_id=payload["sub"],

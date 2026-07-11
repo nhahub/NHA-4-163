@@ -96,10 +96,16 @@ class TestScorePair:
         assert _score_pair(a, b) == pytest.approx(1.0, abs=0.01)
 
     def test_completely_different_score_low(self) -> None:
-        a = self._make(family_name="Smith", given_name="John",
-                       date_of_birth="1985-01-01", gender="male")
-        b = self._make(patient_id="b", family_name="Xyz", given_name="Abc",
-                       date_of_birth="1960-12-31", gender="female")
+        a = self._make(
+            family_name="Smith", given_name="John", date_of_birth="1985-01-01", gender="male"
+        )
+        b = self._make(
+            patient_id="b",
+            family_name="Xyz",
+            given_name="Abc",
+            date_of_birth="1960-12-31",
+            gender="female",
+        )
         assert _score_pair(a, b) < MATCH_THRESHOLD
 
     def test_typo_in_family_name_still_above_threshold(self) -> None:

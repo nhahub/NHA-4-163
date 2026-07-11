@@ -25,9 +25,8 @@ can also be run ad-hoc::
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any
 
 import numpy as np
 
@@ -35,9 +34,9 @@ log = logging.getLogger(__name__)
 
 # Thresholds copied from model_training_dag — alert if any are violated
 _ALERT_THRESHOLDS: dict[str, float] = {
-    "roc_auc": 0.70,       # minimum acceptable AUC
-    "brier_score": 0.25,   # maximum acceptable Brier score
-    "ece": 0.10,           # maximum acceptable Expected Calibration Error
+    "roc_auc": 0.70,  # minimum acceptable AUC
+    "brier_score": 0.25,  # maximum acceptable Brier score
+    "ece": 0.10,  # maximum acceptable Expected Calibration Error
 }
 
 _MIN_SAMPLES_FOR_EVALUATION = 30  # skip evaluation if fewer labeled examples
@@ -112,7 +111,7 @@ def _expected_calibration_error(
     bins = np.linspace(0.0, 1.0, n_bins + 1)
     ece = 0.0
     n = len(y_true)
-    for lo, hi in zip(bins[:-1], bins[1:]):
+    for lo, hi in zip(bins[:-1], bins[1:], strict=False):
         if hi == 1.0:
             mask = (y_proba >= lo) & (y_proba <= hi)
         else:
@@ -245,13 +244,9 @@ def evaluate_production_performance(
         ece = _expected_calibration_error(y_true, y_proba)
 
         if roc_auc < _ALERT_THRESHOLDS["roc_auc"]:
-            alerts.append(
-                f"ROC-AUC {roc_auc:.3f} < threshold {_ALERT_THRESHOLDS['roc_auc']}"
-            )
+            alerts.append(f"ROC-AUC {roc_auc:.3f} < threshold {_ALERT_THRESHOLDS['roc_auc']}")
         if brier > _ALERT_THRESHOLDS["brier_score"]:
-            alerts.append(
-                f"Brier score {brier:.3f} > threshold {_ALERT_THRESHOLDS['brier_score']}"
-            )
+            alerts.append(f"Brier score {brier:.3f} > threshold {_ALERT_THRESHOLDS['brier_score']}")
         if ece > _ALERT_THRESHOLDS["ece"]:
             alerts.append(f"ECE {ece:.3f} > threshold {_ALERT_THRESHOLDS['ece']}")
 
@@ -275,7 +270,10 @@ def evaluate_production_performance(
 
     log.info(
         "Performance report: roc_auc=%.3f brier=%.3f ece=%.3f alerts=%d",
-        roc_auc or 0, brier or 0, ece or 0, len(alerts),
+        roc_auc or 0,
+        brier or 0,
+        ece or 0,
+        len(alerts),
     )
     return report
 
@@ -298,6 +296,6 @@ if __name__ == "__main__":
         experiment_name=args.experiment,
     )
     if report.has_degradation():
-        print(f"DEGRADATION DETECTED: {report.alerts}", file=sys.stderr)
+        print(f"DEGRADATION DETECTED: {report.alerts}", file=sys.stderr)  # noqa: T201 — CLI output
         sys.exit(1)
-    print(f"OK — roc_auc={report.roc_auc}, brier={report.brier_score}")
+    print(f"OK — roc_auc={report.roc_auc}, brier={report.brier_score}")  # noqa: T201 — CLI output

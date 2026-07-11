@@ -1,187 +1,165 @@
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project     = var.project
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
-  }
-}
-
-# Kubernetes and Helm providers are configured after EKS is created.
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
-  token                  = data.aws_eks_cluster_auth.cluster.token
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
-    token                  = data.aws_eks_cluster_auth.cluster.token
-  }
-}
-
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_name
+provider "azurerm" {
+  features {}
 }
 
 # ── Locals ─────────────────────────────────────────────────────────────────────
 
 locals {
   name_prefix = "${var.project}-${var.environment}"
+
+  common_tags = {
+    Project     = var.project
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
 
-# ── VPC ────────────────────────────────────────────────────────────────────────
+# ── Resource group ─────────────────────────────────────────────────────────────
 
-module "vpc" {
-  source = "./modules/vpc"
-
-  name_prefix        = local.name_prefix
-  vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
+resource "azurerm_resource_group" "this" {
+  name     = "${local.name_prefix}-rg"
+  location = var.location
+  tags     = local.common_tags
 }
 
-# ── EKS ────────────────────────────────────────────────────────────────────────
+# ── Virtual network ────────────────────────────────────────────────────────────
 
-module "eks" {
-  source = "./modules/eks"
-
-  name_prefix         = local.name_prefix
-  kubernetes_version  = var.kubernetes_version
-  vpc_id              = module.vpc.vpc_id
-  private_subnet_ids  = module.vpc.private_subnet_ids
-  node_instance_types = var.node_instance_types
-  node_min_size       = var.node_min_size
-  node_max_size       = var.node_max_size
-  node_desired_size   = var.node_desired_size
+resource "azurerm_virtual_network" "this" {
+  name                = "${local.name_prefix}-vnet"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  address_space       = [var.vnet_cidr]
+  tags                = local.common_tags
 }
 
-# ── RDS PostgreSQL ─────────────────────────────────────────────────────────────
-
-module "rds" {
-  source = "./modules/rds"
-
-  name_prefix              = local.name_prefix
-  vpc_id                   = module.vpc.vpc_id
-  private_subnet_ids       = module.vpc.private_subnet_ids
-  allowed_security_groups  = [module.eks.node_security_group_id]
-  instance_class           = var.rds_instance_class
-  allocated_storage_gb     = var.rds_allocated_storage_gb
-  max_allocated_storage_gb = var.rds_max_allocated_storage_gb
-  postgres_version         = var.rds_postgres_version
-  database_name            = var.rds_database_name
-  username                 = var.rds_username
-  multi_az                 = var.rds_multi_az
-  deletion_protection      = var.rds_deletion_protection
+resource "azurerm_subnet" "aks" {
+  name                 = "${local.name_prefix}-aks-subnet"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.aks_subnet_cidr]
 }
 
-# ── ElastiCache Redis ──────────────────────────────────────────────────────────
+resource "azurerm_subnet" "data" {
+  name                 = "${local.name_prefix}-data-subnet"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.data_subnet_cidr]
 
-module "elasticache" {
-  source = "./modules/elasticache"
-
-  name_prefix             = local.name_prefix
-  vpc_id                  = module.vpc.vpc_id
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  allowed_security_groups = [module.eks.node_security_group_id]
-  node_type               = var.redis_node_type
-  engine_version          = var.redis_engine_version
-  num_cache_nodes         = var.redis_num_cache_nodes
-}
-
-# ── ECR ────────────────────────────────────────────────────────────────────────
-
-module "ecr" {
-  source = "./modules/ecr"
-
-  name_prefix           = local.name_prefix
-  image_tag_mutability  = var.ecr_image_tag_mutability
-  image_retention_count = var.ecr_image_retention_count
-}
-
-# ── Kubernetes: core cluster resources ────────────────────────────────────────
-
-resource "kubernetes_namespace" "healthcare" {
-  metadata {
-    name = "healthcare"
-    labels = {
-      "app.kubernetes.io/managed-by" = "terraform"
-      environment                    = var.environment
+  # Delegated to the PostgreSQL Flexible Server for VNet integration.
+  delegation {
+    name = "postgres-delegation"
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
     }
   }
 
-  depends_on = [module.eks]
+  service_endpoints = ["Microsoft.Storage"]
 }
 
-# Store RDS credentials as a Kubernetes Secret so pods can consume them.
-resource "kubernetes_secret" "rds_credentials" {
-  metadata {
-    name      = "rds-credentials"
-    namespace = kubernetes_namespace.healthcare.metadata[0].name
-  }
+# ── Azure Container Registry (replaces ECR) ────────────────────────────────────
 
-  data = {
-    host     = module.rds.endpoint
-    port     = "5432"
-    database = var.rds_database_name
-    username = var.rds_username
-    password = module.rds.password
-    dsn      = "postgresql://${var.rds_username}:${module.rds.password}@${module.rds.endpoint}:5432/${var.rds_database_name}"
-  }
-
-  type = "Opaque"
+resource "azurerm_container_registry" "this" {
+  name                = replace("${local.name_prefix}acr", "-", "")
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  sku                 = var.acr_sku
+  admin_enabled       = false
+  tags                = local.common_tags
 }
 
-resource "kubernetes_secret" "redis_credentials" {
-  metadata {
-    name      = "redis-credentials"
-    namespace = kubernetes_namespace.healthcare.metadata[0].name
+# ── AKS cluster (replaces EKS) ─────────────────────────────────────────────────
+
+resource "azurerm_kubernetes_cluster" "this" {
+  name                = "${local.name_prefix}-aks"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  dns_prefix          = "${local.name_prefix}-aks"
+  kubernetes_version  = var.kubernetes_version
+  tags                = local.common_tags
+
+  default_node_pool {
+    name                 = "system"
+    vm_size              = var.node_vm_size
+    vnet_subnet_id       = azurerm_subnet.aks.id
+    enable_auto_scaling  = true
+    min_count            = var.node_min_count
+    max_count            = var.node_max_count
+    orchestrator_version = var.kubernetes_version
   }
 
-  data = {
-    host     = module.elasticache.endpoint
-    port     = "6379"
-    password = module.elasticache.auth_token
-    url      = "redis://:${module.elasticache.auth_token}@${module.elasticache.endpoint}:6379/0"
+  identity {
+    type = "SystemAssigned"
   }
 
-  type = "Opaque"
+  network_profile {
+    network_plugin = "azure"
+    network_policy = "azure"
+  }
 }
 
-# ── Helm: AWS Load Balancer Controller ────────────────────────────────────────
-
-resource "helm_release" "aws_load_balancer_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "1.7.2"
-
-  set {
-    name  = "clusterName"
-    value = module.eks.cluster_name
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.eks.load_balancer_controller_role_arn
-  }
-
-  depends_on = [module.eks]
+# Allow the AKS kubelet identity to pull images from ACR.
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                            = azurerm_container_registry.this.id
+  role_definition_name             = "AcrPull"
+  principal_id                     = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+  skip_service_principal_aad_check = true
 }
 
-# ── Helm: metrics-server (needed for HPA) ─────────────────────────────────────
+# ── Azure Database for PostgreSQL (replaces RDS) ───────────────────────────────
 
-resource "helm_release" "metrics_server" {
-  name       = "metrics-server"
-  repository = "https://kubernetes-sigs.github.io/metrics-server/"
-  chart      = "metrics-server"
-  namespace  = "kube-system"
-  version    = "3.12.1"
+resource "random_password" "postgres" {
+  length  = 32
+  special = true
+}
 
-  depends_on = [module.eks]
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "${local.name_prefix}.postgres.database.azure.com"
+  resource_group_name = azurerm_resource_group.this.name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
+  name                  = "${local.name_prefix}-postgres-link"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+}
+
+resource "azurerm_postgresql_flexible_server" "this" {
+  name                          = "${local.name_prefix}-pg"
+  resource_group_name           = azurerm_resource_group.this.name
+  location                      = azurerm_resource_group.this.location
+  version                       = var.postgres_version
+  administrator_login           = var.postgres_admin_username
+  administrator_password        = random_password.postgres.result
+  sku_name                      = var.postgres_sku_name
+  storage_mb                    = var.postgres_storage_mb
+  delegated_subnet_id           = azurerm_subnet.data.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
+  public_network_access_enabled = false
+  zone                          = "1"
+  tags                          = local.common_tags
+
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+}
+
+resource "azurerm_postgresql_flexible_server_database" "this" {
+  name      = var.postgres_database_name
+  server_id = azurerm_postgresql_flexible_server.this.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+# ── Azure Cache for Redis (replaces ElastiCache) ───────────────────────────────
+
+resource "azurerm_redis_cache" "this" {
+  name                = "${local.name_prefix}-redis"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  capacity            = var.redis_capacity
+  family              = var.redis_family
+  sku_name            = var.redis_sku_name
+  enable_non_ssl_port = false
+  minimum_tls_version = "1.2"
+  tags                = local.common_tags
 }

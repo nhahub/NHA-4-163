@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -63,7 +62,7 @@ class SoftDeleteMixin:
     ``WHERE deleted_at IS NULL`` explicitly or use a view.
     """
 
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         default=None,
@@ -78,5 +77,5 @@ class ActorMixin:
     Never populate these with raw user-supplied strings without validation.
     """
 
-    created_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    updated_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -18,7 +18,6 @@ Design notes
 from __future__ import annotations
 
 import uuid
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,7 +32,7 @@ class PatientFeatureVector(BaseModel):
     feature_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
 
     # ── Demographics ──────────────────────────────────────────────────────────
-    age_years: Optional[int] = Field(default=None, ge=0, le=150)
+    age_years: int | None = Field(default=None, ge=0, le=150)
     age_group: str = "unknown"
     gender_male: int = Field(default=0, ge=0, le=1)
     gender_female: int = Field(default=0, ge=0, le=1)
@@ -59,7 +58,7 @@ class PatientFeatureVector(BaseModel):
     completed_medication_count: int = Field(default=0, ge=0)
     stopped_medication_count: int = Field(default=0, ge=0)
     distinct_medication_count: int = Field(default=0, ge=0)
-    adherence_proxy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    adherence_proxy: float | None = Field(default=None, ge=0.0, le=1.0)
 
     # ── Graph features ────────────────────────────────────────────────────────
     affected_relatives_count: int = Field(default=0, ge=0)

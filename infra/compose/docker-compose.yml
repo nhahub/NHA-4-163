@@ -16,6 +16,51 @@ x-logging: &default-logging
 x-restart: &default-restart
   restart: unless-stopped
 
+# ── Airflow shared config (opt-in via --profile orchestration) ────────────────
+# Custom image (infra/docker/airflow.Dockerfile) adds the DAG tasks' runtime
+# deps; project source is mounted at /opt/airflow and exposed via PYTHONPATH.
+x-airflow-common: &airflow-common
+  build:
+    context: ../..
+    dockerfile: infra/docker/airflow.Dockerfile
+  image: healthcare-airflow:2.9.1
+  profiles: ["orchestration"]
+  logging: *default-logging
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-healthcare_app}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?AIRFLOW_FERNET_KEY is required}
+  AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?AIRFLOW_SECRET_KEY is required}
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  # Put mounted project source (libs/, pipelines/, ml/) on the import path so
+  # DAG tasks can `import libs.*`, `import pipelines.*`, `import ml.*`.
+  PYTHONPATH: /opt/airflow
+  # Downstream service connection details consumed by task code.
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_DB: ${POSTGRES_DB:-healthcare}
+  POSTGRES_USER: ${POSTGRES_USER:-healthcare_app}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  NEO4J_URI: bolt://neo4j:7687
+  NEO4J_USER: ${NEO4J_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+  MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-healthcare-raw}
+  MINIO_BUCKET_DELTA: ${MINIO_BUCKET_DELTA:-healthcare-delta}
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+
+x-airflow-volumes: &airflow-volumes
+  - ../../pipelines/airflow/dags:/opt/airflow/dags:ro
+  - ../../libs:/opt/airflow/libs:ro
+  - ../../pipelines:/opt/airflow/pipelines:ro
+  - ../../ml:/opt/airflow/ml:ro
+  - airflow_logs:/opt/airflow/logs
+
 services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
@@ -57,7 +102,7 @@ services:
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
-      - ../../schemas/neo4j:/var/lib/neo4j/import:ro
+      - ../../schemas/neo4j:/var/lib/neo4j/import
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
       interval: 15s
@@ -77,7 +122,7 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo srvr | nc localhost 2181 | grep -q 'Zookeeper version:'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -210,17 +255,18 @@ services:
 
   # ── MLflow Tracking Server ───────────────────────────────────────────────────
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.13.0
+    build:
+      context: ../..
+      dockerfile: infra/docker/mlflow.Dockerfile
+    image: healthcare-mlflow:latest
     <<: *default-restart
     logging: *default-logging
     depends_on:
-      postgres:
-        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     command: >
       mlflow server
-        --backend-store-uri postgresql://${POSTGRES_USER:-healthcare_app}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+        --backend-store-uri sqlite:////tmp/mlflow.db
         --artifacts-destination s3://mlflow-artifacts
         --host 0.0.0.0
         --port 5000
@@ -231,7 +277,7 @@ services:
     ports:
       - "5000:5000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -313,64 +359,30 @@ services:
   #   make orchestration-up
 
   airflow-init:
-    image: apache/airflow:2.9.1
-    profiles: ["orchestration"]
-    logging: *default-logging
+    <<: *airflow-common
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-healthcare_app}:${POSTGRES_PASSWORD}@postgres:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?AIRFLOW_FERNET_KEY is required}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?AIRFLOW_SECRET_KEY is required}
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      <<: *airflow-env
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?AIRFLOW_ADMIN_PASSWORD is required}
     entrypoint: /bin/bash
     command: -c "airflow db migrate && airflow users create --username $$_AIRFLOW_WWW_USER_USERNAME --password $$_AIRFLOW_WWW_USER_PASSWORD --firstname Admin --lastname User --role Admin --email admin@healthcare.local || true"
-    volumes:
-      - ../../pipelines/airflow/dags:/opt/airflow/dags:ro
+    volumes: *airflow-volumes
     restart: "no"
 
   airflow-scheduler:
-    image: apache/airflow:2.9.1
-    profiles: ["orchestration"]
-    <<: *default-restart
-    logging: *default-logging
+    <<: *airflow-common
+    restart: unless-stopped
     depends_on:
       airflow-init:
         condition: service_completed_successfully
     command: scheduler
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-healthcare_app}:${POSTGRES_PASSWORD}@postgres:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      # Propagate downstream service connection details to tasks
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_DB: ${POSTGRES_DB:-healthcare}
-      POSTGRES_USER: ${POSTGRES_USER:-healthcare_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      NEO4J_URI: bolt://neo4j:7687
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-healthcare-raw}
-      MINIO_BUCKET_DELTA: ${MINIO_BUCKET_DELTA:-healthcare-delta}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-    volumes:
-      - ../../pipelines/airflow/dags:/opt/airflow/dags:ro
-      - ../../libs:/opt/airflow/libs:ro
-      - ../../pipelines:/opt/airflow/pipelines:ro
-      - airflow_logs:/opt/airflow/logs
+    environment: *airflow-env
+    volumes: *airflow-volumes
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
       interval: 30s
@@ -379,25 +391,16 @@ services:
       start_period: 60s
 
   airflow-webserver:
-    image: apache/airflow:2.9.1
-    profiles: ["orchestration"]
-    <<: *default-restart
-    logging: *default-logging
+    <<: *airflow-common
+    restart: unless-stopped
     depends_on:
       airflow-scheduler:
         condition: service_healthy
     command: webserver
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-healthcare_app}:${POSTGRES_PASSWORD}@postgres:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    environment: *airflow-env
     ports:
       - "${AIRFLOW_PORT:-8082}:8080"
-    volumes:
-      - ../../pipelines/airflow/dags:/opt/airflow/dags:ro
-      - airflow_logs:/opt/airflow/logs
+    volumes: *airflow-volumes
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -495,7 +498,7 @@ services:
     ports:
       - "${STREAMLIT_PORT:-8501}:8501"
     volumes:
-      - ../../services/streamlit:/app
+      - ../../services:/app/services
       - ../../libs:/app/libs
       - ../../ml:/app/ml
     healthcheck:

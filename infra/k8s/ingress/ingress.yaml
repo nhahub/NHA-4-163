@@ -6,28 +6,26 @@ metadata:
   labels:
     app: healthcare-api
   annotations:
-    # AWS Load Balancer Controller — creates an ALB
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # NGINX Ingress Controller on AKS (install via Helm or the AKS
+    # "Web Application Routing" add-on).
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
 
-    # TLS — reference an ACM certificate ARN
-    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
+    # TLS via cert-manager (issues/renews a Let's Encrypt certificate).
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 
-    # Security headers
-    alb.ingress.kubernetes.io/security-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-
-    # Health check
-    alb.ingress.kubernetes.io/healthcheck-path: /health
-    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
-    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
-    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
-
-    # WAF (optional — replace with your WAF ACL ARN)
-    # alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-1:ACCOUNT:regional/webacl/NAME/ID
+    # Security headers + health check
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
 spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.healthcare-internal.example.com
+      secretName: healthcare-api-tls
   rules:
     - host: api.healthcare-internal.example.com
       http:

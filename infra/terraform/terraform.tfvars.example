@@ -1,36 +1,32 @@
 # Copy to terraform.tfvars and fill in values.
 # NEVER commit terraform.tfvars — it may contain sensitive defaults.
 
-aws_region  = "us-east-1"
+location    = "eastus"
 environment = "staging"
 project     = "healthcare"
 
 # Networking
-vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+vnet_cidr        = "10.0.0.0/16"
+aks_subnet_cidr  = "10.0.1.0/24"
+data_subnet_cidr = "10.0.2.0/24"
 
-# EKS
-kubernetes_version  = "1.29"
-node_instance_types = ["t3.large"]
-node_min_size       = 2
-node_max_size       = 6
-node_desired_size   = 3
+# AKS
+kubernetes_version = "1.29"
+node_vm_size       = "Standard_D2s_v5"
+node_min_count     = 2
+node_max_count     = 6
 
-# RDS
-rds_instance_class           = "db.t3.medium"
-rds_allocated_storage_gb     = 50
-rds_max_allocated_storage_gb = 200
-rds_postgres_version         = "15.6"
-rds_database_name            = "healthcare"
-rds_username                 = "healthcare_app"
-rds_multi_az                 = false       # set true for production
-rds_deletion_protection      = false       # set true for production
+# Azure Database for PostgreSQL (Flexible Server)
+postgres_sku_name       = "B_Standard_B1ms" # use GP_Standard_D2s_v3 for production
+postgres_storage_mb     = 32768
+postgres_version        = "15"
+postgres_database_name  = "healthcare"
+postgres_admin_username = "healthcare_app"
 
-# Redis
-redis_node_type       = "cache.t3.small"
-redis_engine_version  = "7.1"
-redis_num_cache_nodes = 1
+# Azure Cache for Redis
+redis_capacity = 0       # 0 = 250 MB (Basic/Standard); use 1 for Premium
+redis_family   = "C"     # C = Basic/Standard, P = Premium
+redis_sku_name = "Basic" # use "Premium" for production (VNet + persistence)
 
-# ECR
-ecr_image_tag_mutability  = "IMMUTABLE"
-ecr_image_retention_count = 30
+# Azure Container Registry
+acr_sku = "Basic" # use "Premium" for geo-replication in production

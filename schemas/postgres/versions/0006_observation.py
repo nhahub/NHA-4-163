@@ -5,21 +5,26 @@ Revision ID: m0006
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "m0006"
-down_revision: Union[str, None] = "m0005"
+down_revision: str | None = "m0005"
 branch_labels = None
 depends_on = None
 
 _OBS_STATUS = postgresql.ENUM(
-    "registered", "preliminary", "final", "amended",
-    "corrected", "cancelled", "entered-in-error", "unknown",
-    name="observation_status", create_type=True,
+    "registered",
+    "preliminary",
+    "final",
+    "amended",
+    "corrected",
+    "cancelled",
+    "entered-in-error",
+    "unknown",
+    name="observation_status",
+    create_type=False,
 )
 
 
@@ -28,12 +33,23 @@ def upgrade() -> None:
 
     op.create_table(
         "observation",
-        sa.Column("id", postgresql.UUID(as_uuid=True),
-                  server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("patient_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("patient.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("encounter_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("encounter.id", ondelete="SET NULL")),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "patient_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("patient.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "encounter_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("encounter.id", ondelete="SET NULL"),
+        ),
         sa.Column("status", _OBS_STATUS, nullable=False),
         sa.Column("category", sa.String(100)),
         sa.Column("code_system", sa.String(255), nullable=False),
@@ -54,8 +70,18 @@ def upgrade() -> None:
         sa.Column("ref_range_text", sa.String(255)),
         sa.Column("interpretation", sa.String(10)),
         sa.Column("resource_json", postgresql.JSONB),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(255)),
         sa.Column("updated_by", sa.String(255)),
     )
@@ -70,13 +96,11 @@ def upgrade() -> None:
         ["patient_id", "code", "effective_datetime"],
     )
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TRIGGER trg_observation_updated_at
         BEFORE UPDATE ON observation
         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

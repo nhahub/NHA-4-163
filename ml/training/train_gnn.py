@@ -65,14 +65,12 @@ def train(
         RuntimeError: If ENABLE_GNN_MODEL env var is not set to ``true``.
     """
     if os.environ.get("ENABLE_GNN_MODEL", "false").lower() != "true":
-        raise RuntimeError(
-            "GNN training requires ENABLE_GNN_MODEL=true in the environment"
-        )
+        raise RuntimeError("GNN training requires ENABLE_GNN_MODEL=true in the environment")
 
-    import numpy as np
-    import pandas as pd
     import mlflow
     import mlflow.pytorch
+    import numpy as np
+    import pandas as pd
     import torch
     import torch.nn as nn
 
@@ -80,7 +78,6 @@ def train(
     from ml.models.calibration import CalibrationMethod, calibrate
     from ml.models.gnn_model import GNNConfig, GraphSAGEModel
     from ml.training.dataset import (
-        apply_split,
         build_dataset,
         build_pyg_data,
         load_feature_vector,
@@ -113,8 +110,12 @@ def train(
     # ── Build PyG graph ───────────────────────────────────────────────────────
     log.info("Building PyG graph (loading edges from Neo4j)…")
     data, pid_to_idx = build_pyg_data(
-        X, y, patient_ids,
-        train_ids_final, val_ids, test_ids,
+        X,
+        y,
+        patient_ids,
+        train_ids_final,
+        val_ids,
+        test_ids,
         neo4j_uri=n4j.uri,
         neo4j_user=n4j.user,
         neo4j_password=n4j.password.get_secret_value(),
@@ -122,12 +123,8 @@ def train(
 
     # Override train_mask to exclude calibration nodes
     cal_set = set(cal_ids.tolist())
-    data.train_mask = torch.tensor(
-        [pid in set(train_ids_final.tolist()) for pid in patient_ids]
-    )
-    data.cal_mask = torch.tensor(
-        [pid in cal_set for pid in patient_ids]
-    )
+    data.train_mask = torch.tensor([pid in set(train_ids_final.tolist()) for pid in patient_ids])
+    data.cal_mask = torch.tensor([pid in cal_set for pid in patient_ids])
 
     # ── Config & model ────────────────────────────────────────────────────────
     torch.manual_seed(42)
@@ -164,13 +161,14 @@ def train(
             # Forward pass uses raw logits for BCEWithLogitsLoss
             out_logits = model.convs[0](data.x, data.edge_index)
             import torch.nn.functional as F
-            for conv, bn in zip(model.convs[1:], model.bns[1:]):
+
+            for conv, bn in zip(model.convs[1:], model.bns[1:], strict=False):
                 out_logits = bn(F.relu(out_logits))
                 out_logits = model.dropout(out_logits)
                 out_logits = conv(out_logits, data.edge_index)
-            out_logits = model.classifier(
-                model.dropout(F.relu(model.bns[-1](out_logits)))
-            ).squeeze(-1)
+            out_logits = model.classifier(model.dropout(F.relu(model.bns[-1](out_logits)))).squeeze(
+                -1
+            )
 
             loss = criterion(out_logits[data.train_mask], data.y[data.train_mask])
             loss.backward()
@@ -182,12 +180,16 @@ def train(
                 val_proba = model(data.x, data.edge_index)[data.val_mask].numpy()
                 val_true = data.y[data.val_mask].numpy()
             from sklearn.metrics import brier_score_loss
+
             val_brier = float(brier_score_loss(val_true, val_proba))
 
             if epoch % 20 == 0:
                 log.info(
                     "Epoch %d/%d  loss=%.4f  val_brier=%.4f",
-                    epoch, cfg.epochs, float(loss), val_brier,
+                    epoch,
+                    cfg.epochs,
+                    float(loss),
+                    val_brier,
                 )
             mlflow.log_metrics(
                 {"train_loss": float(loss), "val_brier": val_brier},
@@ -220,16 +222,19 @@ def train(
         )
         # For a GNN the calibration is a post-hoc sigmoid applied to node scores
         from sklearn.linear_model import LogisticRegression
+
         lr_cal = LogisticRegression(max_iter=500)
         lr_cal.fit(cal_proba_raw.reshape(-1, 1), cal_true)
 
         def _calibrated_predict(raw_proba: np.ndarray) -> np.ndarray:
             return lr_cal.predict_proba(raw_proba.reshape(-1, 1))[:, 1]
 
-        mlflow.log_metrics({
-            "brier_before_calibration": calibrated.brier_before,
-            "brier_after_calibration": calibrated.brier_after,
-        })
+        mlflow.log_metrics(
+            {
+                "brier_before_calibration": calibrated.brier_before,
+                "brier_after_calibration": calibrated.brier_after,
+            }
+        )
 
         # ── Evaluation ────────────────────────────────────────────────────────
         with torch.no_grad():
@@ -247,8 +252,9 @@ def train(
             if sensitive_col in test_df.columns:
                 report = compute_fairness_report(test_true, test_proba_cal, test_df[sensitive_col])
                 mlflow.log_metrics(report.to_mlflow_metrics(prefix=sensitive_col))
-                mlflow.log_text(report.to_dataframe().to_csv(index=False),
-                                f"fairness_{sensitive_col}.csv")
+                mlflow.log_text(
+                    report.to_dataframe().to_csv(index=False), f"fairness_{sensitive_col}.csv"
+                )
 
         # ── Register ──────────────────────────────────────────────────────────
         mlflow.pytorch.log_model(
@@ -258,7 +264,10 @@ def train(
         )
         log.info(
             "GNN run complete — run_id=%s  ROC-AUC=%.4f  PR-AUC=%.4f  Brier=%.4f",
-            run_id, eval_result.roc_auc, eval_result.pr_auc, eval_result.brier_score,
+            run_id,
+            eval_result.roc_auc,
+            eval_result.pr_auc,
+            eval_result.brier_score,
         )
     return run_id
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -74,7 +74,7 @@ async def create_encounter(
         service_type=body.service_type,
         facility_name=body.facility_name,
         facility_id=body.facility_id,
-        period_start=datetime.now(timezone.utc),
+        period_start=datetime.now(UTC),
     )
     db.add(encounter)
     await db.flush()
@@ -142,9 +142,7 @@ async def get_encounter(encounter_id: uuid.UUID, db: DbSession) -> EncounterDeta
         raise HTTPException(status_code=404, detail="Encounter not found")
 
     # Linked conditions
-    cond_result = await db.execute(
-        select(Condition).where(Condition.encounter_id == encounter_id)
-    )
+    cond_result = await db.execute(select(Condition).where(Condition.encounter_id == encounter_id))
     conditions = cond_result.scalars().all()
 
     # Linked observations
@@ -232,7 +230,7 @@ async def close_encounter(encounter_id: uuid.UUID, db: DbSession) -> EncounterRe
         raise HTTPException(status_code=409, detail="Encounter is already closed")
 
     encounter.status = EncounterStatus.FINISHED
-    encounter.period_end = datetime.now(timezone.utc)
+    encounter.period_end = datetime.now(UTC)
 
     await db.flush()
     await db.refresh(encounter)

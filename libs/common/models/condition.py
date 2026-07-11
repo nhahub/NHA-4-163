@@ -12,7 +12,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from libs.common.models.physician import Physician
 
 
-class ClinicalStatus(str, enum.Enum):
+class ClinicalStatus(enum.StrEnum):
     """FHIR condition-clinical value set."""
 
     ACTIVE = "active"
@@ -38,7 +38,7 @@ class ClinicalStatus(str, enum.Enum):
     RESOLVED = "resolved"
 
 
-class VerificationStatus(str, enum.Enum):
+class VerificationStatus(enum.StrEnum):
     """FHIR condition-ver-status value set."""
 
     UNCONFIRMED = "unconfirmed"
@@ -49,7 +49,7 @@ class VerificationStatus(str, enum.Enum):
     ENTERED_IN_ERROR = "entered-in-error"
 
 
-class ConditionSeverity(str, enum.Enum):
+class ConditionSeverity(enum.StrEnum):
     """FHIR condition-severity value set (SNOMED CT subset)."""
 
     SEVERE = "severe"
@@ -74,12 +74,12 @@ class Condition(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
         nullable=False,
         index=True,
     )
-    encounter_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    encounter_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("encounter.id", ondelete="SET NULL"),
         index=True,
     )
-    recorder_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    recorder_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("physician.id", ondelete="SET NULL"),
         index=True,
@@ -93,12 +93,12 @@ class Condition(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     )
 
     # ── FHIR Condition.verificationStatus ────────────────────────────────────
-    verification_status: Mapped[Optional[VerificationStatus]] = mapped_column(
+    verification_status: Mapped[VerificationStatus | None] = mapped_column(
         Enum(VerificationStatus, name="verification_status"), index=True
     )
 
     # ── FHIR Condition.severity ───────────────────────────────────────────────
-    severity: Mapped[Optional[ConditionSeverity]] = mapped_column(
+    severity: Mapped[ConditionSeverity | None] = mapped_column(
         Enum(ConditionSeverity, name="condition_severity")
     )
 
@@ -107,18 +107,16 @@ class Condition(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     # e.g., code_system="http://hl7.org/fhir/sid/icd-10", code="I10"
     code_system: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    code_display: Mapped[Optional[str]] = mapped_column(String(500))
-    code_text: Mapped[Optional[str]] = mapped_column(String(500))
+    code_display: Mapped[str | None] = mapped_column(String(500))
+    code_text: Mapped[str | None] = mapped_column(String(500))
 
     # ── FHIR Condition.onset ──────────────────────────────────────────────────
-    onset_datetime: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), index=True
-    )
+    onset_datetime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     # Used when exact onset date is unknown (e.g., family history self-report).
-    onset_age_years: Mapped[Optional[int]] = mapped_column(Integer)
+    onset_age_years: Mapped[int | None] = mapped_column(Integer)
 
     # ── FHIR Condition.abatement ──────────────────────────────────────────────
-    abatement_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    abatement_datetime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # ── Hereditary prediction extensions ─────────────────────────────────────
     # True if this condition is classified as hereditary (OMIM/ClinVar lookup).
@@ -129,9 +127,9 @@ class Condition(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     )
 
     # ── Full FHIR resource ────────────────────────────────────────────────────
-    resource_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    resource_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    patient: Mapped["Patient"] = relationship(back_populates="conditions")
-    encounter: Mapped[Optional["Encounter"]] = relationship(back_populates="conditions")
-    recorder: Mapped[Optional["Physician"]] = relationship(back_populates="conditions")
+    patient: Mapped[Patient] = relationship(back_populates="conditions")
+    encounter: Mapped[Encounter | None] = relationship(back_populates="conditions")
+    recorder: Mapped[Physician | None] = relationship(back_populates="conditions")

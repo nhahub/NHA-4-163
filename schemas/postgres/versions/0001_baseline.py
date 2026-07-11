@@ -13,12 +13,10 @@ Revision ID: m0001
 
 from __future__ import annotations
 
-from typing import Union
-
 from alembic import op
 
 revision: str = "m0001"
-down_revision: Union[str, None] = None
+down_revision: str | None = None
 branch_labels = None
 depends_on = None
 
@@ -30,8 +28,7 @@ def upgrade() -> None:
 
     # Trigger function: automatically update `updated_at` on row modification.
     # Used by every table that has an `updated_at` column.
-    op.execute(
-        """
+    op.execute("""
         CREATE OR REPLACE FUNCTION set_updated_at()
         RETURNS TRIGGER
         LANGUAGE plpgsql
@@ -41,8 +38,7 @@ def upgrade() -> None:
             RETURN NEW;
         END;
         $$;
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

@@ -2,7 +2,7 @@
 # Setup script for Healthcare Hereditary Disease Prediction System
 # Usage: python setup.py install
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="healthcare-hereditary",

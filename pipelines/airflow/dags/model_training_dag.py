@@ -30,10 +30,9 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from airflow.decorators import dag, task
-from airflow.exceptions import AirflowSkipException
 
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,7 +53,7 @@ _DEFAULT_ARGS = {
 _STAGING_THRESHOLDS = {
     "roc_auc": 0.70,
     "brier_score": 0.25,  # ≤ threshold
-    "ece": 0.10,           # ≤ threshold
+    "ece": 0.10,  # ≤ threshold
     "age_group_equal_opportunity_gap": 0.15,  # ≤ threshold
 }
 
@@ -63,7 +62,7 @@ _STAGING_THRESHOLDS = {
     dag_id="model_training",
     description="Weekly XGBoost + GraphSAGE training with MLflow tracking and model registration",
     schedule="0 4 * * 0",  # Sundays 04:00 UTC
-    start_date=datetime(2024, 1, 7, tzinfo=timezone.utc),
+    start_date=datetime(2024, 1, 7, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
     default_args=_DEFAULT_ARGS,
@@ -82,26 +81,15 @@ def model_training_dag() -> None:
         Raises:
             AirflowSkipException: If no feature partitions exist yet.
         """
-        import os
-
-        import psycopg2
 
         from libs.common.config import get_settings
 
         # Query the Delta log is complex; instead check feature_date max in Postgres
         # (the feature engineering job would have written features by this point).
-        settings = get_settings()
-        query = """
-            SELECT MAX(feature_date::text) AS latest
-            FROM (
-                SELECT DISTINCT feature_date
-                FROM conditions  -- proxy: any table updated by feature job
-                LIMIT 1
-            ) sq
-        """
+        get_settings()
         # Simpler: use today's date minus 1 day (feature job runs at 03:00,
         # training at 04:00, so yesterday's or today's snapshot is available).
-        from datetime import date, timedelta
+        from datetime import date
 
         feature_date = str(date.today())
         log.info("Using feature_date=%s for training", feature_date)
@@ -124,9 +112,7 @@ def model_training_dag() -> None:
 
         settings = get_settings()
         delta_base = os.environ.get("DELTA_BASE", "s3a://healthcare-delta")
-        experiment = os.environ.get(
-            "MLFLOW_EXPERIMENT_NAME", "hereditary-disease-prediction"
-        )
+        experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME", "hereditary-disease-prediction")
 
         run_id = train(
             feature_date=feature_date,
@@ -169,9 +155,7 @@ def model_training_dag() -> None:
 
         settings = get_settings()
         delta_base = os.environ.get("DELTA_BASE", "s3a://healthcare-delta")
-        experiment = os.environ.get(
-            "MLFLOW_EXPERIMENT_NAME", "hereditary-disease-prediction"
-        )
+        experiment = os.environ.get("MLFLOW_EXPERIMENT_NAME", "hereditary-disease-prediction")
 
         try:
             run_id = train(
@@ -240,9 +224,7 @@ def model_training_dag() -> None:
                 )
 
         if not candidates:
-            log.warning(
-                "No models passed staging thresholds — manual review required"
-            )
+            log.warning("No models passed staging thresholds — manual review required")
             return
 
         # Pick the candidate with the best PR-AUC

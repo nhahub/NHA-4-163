@@ -10,18 +10,19 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from datetime import datetime
-from typing import Any
 
 import pandas as pd
+
 import streamlit as st
 
-
 # ── In-memory database helpers for standalone demo ────────────────────────────
+
 
 def _get_db() -> sqlite3.Connection:
     """Return a shared in-memory SQLite connection stored in session state."""
     # Ensure the PM DB is initialized first (shares the same connection)
     from services.streamlit.views.patient_management import _get_db as get_pm_db
+
     conn = get_pm_db()
     _init_encounter_tables(conn)
     return conn
@@ -64,7 +65,7 @@ def _init_encounter_tables(conn: sqlite3.Connection) -> None:
 def _get_active_encounters(conn: sqlite3.Connection) -> pd.DataFrame:
     """Fetch all encounters that are currently in-progress."""
     query = """
-        SELECT e.id, e.patient_id, p.given_name, p.family_name, 
+        SELECT e.id, e.patient_id, p.given_name, p.family_name,
                e.status, e.encounter_class, e.facility_name, e.period_start
         FROM encounters e
         JOIN patients p ON e.patient_id = p.id
@@ -77,14 +78,15 @@ def _get_active_encounters(conn: sqlite3.Connection) -> pd.DataFrame:
 def _get_encounter_observations(conn: sqlite3.Connection, encounter_id: str) -> pd.DataFrame:
     """Fetch all observations linked to a specific encounter."""
     query = """
-        SELECT * FROM observations 
-        WHERE encounter_id = ? 
+        SELECT * FROM observations
+        WHERE encounter_id = ?
         ORDER BY effective_datetime DESC
     """
     return pd.read_sql_query(query, conn, params=[encounter_id])
 
 
 # ── Main page renderer ────────────────────────────────────────────────────────
+
 
 def render_encounters_page() -> None:
     """Render the Encounters & Vitals page."""
@@ -93,10 +95,12 @@ def render_encounters_page() -> None:
 
     conn = _get_db()
 
-    tab_active, tab_start = st.tabs([
-        "🩺 Active Encounters",
-        "➕ Start Encounter",
-    ])
+    tab_active, tab_start = st.tabs(
+        [
+            "🩺 Active Encounters",
+            "➕ Start Encounter",
+        ]
+    )
 
     # ── Tab 1: Active Encounters ──────────────────────────────────────────────
     with tab_active:
@@ -107,7 +111,9 @@ def render_encounters_page() -> None:
         else:
             # Dropdown to select an active encounter to work on
             encounter_options = {
-                row["id"]: f"{row['given_name']} {row['family_name']} — {row['encounter_class']} ({row['period_start'][:16]})"
+                row[
+                    "id"
+                ]: f"{row['given_name']} {row['family_name']} — {row['encounter_class']} ({row['period_start'][:16]})"  # noqa: E501 — long literal (SQL/markdown), not splittable
                 for _, row in active_df.iterrows()
             }
             selected_enc_id = st.selectbox(
@@ -127,13 +133,15 @@ def render_encounters_page() -> None:
                 info1.metric("Class", enc["encounter_class"])
                 info2.metric("Facility", enc["facility_name"] or "N/A")
                 info3.metric("Started At", enc["period_start"][:16])
-                
+
                 st.divider()
 
-                sub_vitals, sub_close = st.tabs([
-                    "📊 Record Vitals",
-                    "✅ Close Encounter",
-                ])
+                sub_vitals, sub_close = st.tabs(
+                    [
+                        "📊 Record Vitals",
+                        "✅ Close Encounter",
+                    ]
+                )
 
                 # ── Record Vitals sub-tab ─────────────────────────────────────
                 with sub_vitals:
@@ -141,17 +149,45 @@ def render_encounters_page() -> None:
                     with st.form("vitals_form", clear_on_submit=True):
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            sys_bp = st.number_input("Systolic BP (mmHg)", min_value=50, max_value=300, value=None, step=1)
-                            dia_bp = st.number_input("Diastolic BP (mmHg)", min_value=20, max_value=200, value=None, step=1)
-                            hr = st.number_input("Heart Rate (bpm)", min_value=20, max_value=300, value=None, step=1)
+                            sys_bp = st.number_input(
+                                "Systolic BP (mmHg)",
+                                min_value=50,
+                                max_value=300,
+                                value=None,
+                                step=1,
+                            )
+                            dia_bp = st.number_input(
+                                "Diastolic BP (mmHg)",
+                                min_value=20,
+                                max_value=200,
+                                value=None,
+                                step=1,
+                            )
+                            hr = st.number_input(
+                                "Heart Rate (bpm)", min_value=20, max_value=300, value=None, step=1
+                            )
                         with col2:
-                            temp = st.number_input("Temperature (°C)", min_value=30.0, max_value=45.0, value=None, step=0.1)
-                            spo2 = st.number_input("SpO2 (%)", min_value=50, max_value=100, value=None, step=1)
+                            temp = st.number_input(
+                                "Temperature (°C)",
+                                min_value=30.0,
+                                max_value=45.0,
+                                value=None,
+                                step=0.1,
+                            )
+                            spo2 = st.number_input(
+                                "SpO2 (%)", min_value=50, max_value=100, value=None, step=1
+                            )
                         with col3:
-                            weight = st.number_input("Weight (kg)", min_value=0.5, max_value=500.0, value=None, step=0.1)
-                            height = st.number_input("Height (cm)", min_value=20.0, max_value=300.0, value=None, step=0.1)
+                            weight = st.number_input(
+                                "Weight (kg)", min_value=0.5, max_value=500.0, value=None, step=0.1
+                            )
+                            height = st.number_input(
+                                "Height (cm)", min_value=20.0, max_value=300.0, value=None, step=0.1
+                            )
 
-                        vitals_submit = st.form_submit_button("💾 Save Vitals", type="primary", use_container_width=True)
+                        vitals_submit = st.form_submit_button(
+                            "💾 Save Vitals", type="primary", use_container_width=True
+                        )
 
                         if vitals_submit:
                             vitals = [
@@ -167,15 +203,23 @@ def render_encounters_page() -> None:
                             to_insert = []
                             for code, disp, val, unit in vitals:
                                 if val is not None:
-                                    to_insert.append((
-                                        str(uuid.uuid4()), patient_id, selected_enc_id,
-                                        code, disp, now_str, val, unit
-                                    ))
-                            
+                                    to_insert.append(
+                                        (
+                                            str(uuid.uuid4()),
+                                            patient_id,
+                                            selected_enc_id,
+                                            code,
+                                            disp,
+                                            now_str,
+                                            val,
+                                            unit,
+                                        )
+                                    )
+
                             if to_insert:
                                 conn.executemany(
-                                    "INSERT INTO observations (id, patient_id, encounter_id, code, code_display, effective_datetime, value_quantity, value_unit) VALUES (?,?,?,?,?,?,?,?)",
-                                    to_insert
+                                    "INSERT INTO observations (id, patient_id, encounter_id, code, code_display, effective_datetime, value_quantity, value_unit) VALUES (?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                                    to_insert,
                                 )
                                 conn.commit()
                                 st.success(f"✅ Recorded {len(to_insert)} vital signs!")
@@ -187,7 +231,9 @@ def render_encounters_page() -> None:
                     obs_df = _get_encounter_observations(conn, selected_enc_id)
                     if not obs_df.empty:
                         st.write("**Recorded Observations:**")
-                        display_df = obs_df[["effective_datetime", "code_display", "value_quantity", "value_unit"]].copy()
+                        display_df = obs_df[
+                            ["effective_datetime", "code_display", "value_quantity", "value_unit"]
+                        ].copy()
                         display_df.columns = ["Time", "Vital Sign", "Value", "Unit"]
                         display_df["Time"] = display_df["Time"].str[:16]
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -195,12 +241,14 @@ def render_encounters_page() -> None:
                 # ── Close Encounter sub-tab ───────────────────────────────────
                 with sub_close:
                     st.subheader("Complete Visit")
-                    st.info("Closing the encounter will set the end time and mark it as finished. It will no longer appear in the Active Encounters list.")
+                    st.info(
+                        "Closing the encounter will set the end time and mark it as finished. It will no longer appear in the Active Encounters list."  # noqa: E501 — long literal (SQL/markdown), not splittable
+                    )
                     if st.button("🏁 Close Encounter", type="primary", use_container_width=True):
                         now_str = datetime.utcnow().isoformat()
                         conn.execute(
-                            "UPDATE encounters SET status = 'finished', period_end = ? WHERE id = ?",
-                            (now_str, selected_enc_id)
+                            "UPDATE encounters SET status = 'finished', period_end = ? WHERE id = ?",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                            (now_str, selected_enc_id),
                         )
                         conn.commit()
                         st.success("Encounter closed successfully!")
@@ -211,10 +259,15 @@ def render_encounters_page() -> None:
         st.subheader("Start New Encounter")
 
         # Get all patients
-        patients_df = pd.read_sql_query("SELECT id, given_name, family_name, date_of_birth FROM patients WHERE deleted_at IS NULL", conn)
-        
+        patients_df = pd.read_sql_query(
+            "SELECT id, given_name, family_name, date_of_birth FROM patients WHERE deleted_at IS NULL",  # noqa: E501 — long literal (SQL/markdown), not splittable
+            conn,
+        )
+
         if patients_df.empty:
-            st.warning("No patients registered. Please register a patient first in the Patient Management page.")
+            st.warning(
+                "No patients registered. Please register a patient first in the Patient Management page."  # noqa: E501 — long literal (SQL/markdown), not splittable
+            )
             return
 
         with st.form("start_encounter_form", clear_on_submit=True):
@@ -222,21 +275,35 @@ def render_encounters_page() -> None:
                 row["id"]: f"{row['given_name']} {row['family_name']} ({row['date_of_birth']})"
                 for _, row in patients_df.iterrows()
             }
-            patient_id = st.selectbox("Select Patient *", options=list(p_options.keys()), format_func=lambda x: p_options[x])
-            
-            e_class = st.selectbox("Encounter Class *", options=["AMB (Ambulatory)", "IMP (Inpatient)", "EMER (Emergency)", "HH (Home Health)"])
+            patient_id = st.selectbox(
+                "Select Patient *",
+                options=list(p_options.keys()),
+                format_func=lambda x: p_options[x],
+            )
+
+            e_class = st.selectbox(
+                "Encounter Class *",
+                options=[
+                    "AMB (Ambulatory)",
+                    "IMP (Inpatient)",
+                    "EMER (Emergency)",
+                    "HH (Home Health)",
+                ],
+            )
             facility = st.text_input("Facility Name")
-            
-            submit_enc = st.form_submit_button("🚀 Start Encounter", type="primary", use_container_width=True)
+
+            submit_enc = st.form_submit_button(
+                "🚀 Start Encounter", type="primary", use_container_width=True
+            )
 
             if submit_enc:
                 enc_id = str(uuid.uuid4())
-                class_code = e_class.split(" ")[0]
+                class_code = (e_class or "").split(" ")[0]
                 now_str = datetime.utcnow().isoformat()
-                
+
                 conn.execute(
-                    "INSERT INTO encounters (id, patient_id, encounter_class, facility_name, period_start) VALUES (?,?,?,?,?)",
-                    (enc_id, patient_id, class_code, facility or None, now_str)
+                    "INSERT INTO encounters (id, patient_id, encounter_class, facility_name, period_start) VALUES (?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                    (enc_id, patient_id, class_code, facility or None, now_str),
                 )
                 conn.commit()
                 st.success("✅ Encounter started successfully!")

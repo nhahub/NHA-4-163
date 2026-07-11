@@ -10,10 +10,10 @@ State is stored in Redis for polling.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
@@ -94,7 +94,7 @@ async def submit_batch_screen(
         "total": total,
         "progress": 0,
         "results": [],
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "completed_at": None,
         "message": "Job queued",
         "patient_ids": [str(pid) for pid in patient_ids] if patient_ids else [],
@@ -114,7 +114,7 @@ async def submit_batch_screen(
     )
 
 
-async def _run_batch_job(job_id: str, cache: CacheDep, job_state: dict) -> None:
+async def _run_batch_job(job_id: str, cache: CacheDep, job_state: dict[str, Any]) -> None:
     """Background task that processes patients and computes risk scores.
 
     In production this would call ModelService.predict_proba() for each
@@ -152,9 +152,15 @@ async def _run_batch_job(job_id: str, cache: CacheDep, job_state: dict) -> None:
 
             if job_state.get("include_shap"):
                 result["shap_factors"] = [
-                    {"feature": "family_history_count", "shap_value": round(random.uniform(-0.2, 0.3), 3)},
+                    {
+                        "feature": "family_history_count",
+                        "shap_value": round(random.uniform(-0.2, 0.3), 3),
+                    },
                     {"feature": "age_years", "shap_value": round(random.uniform(-0.1, 0.2), 3)},
-                    {"feature": "condition_count", "shap_value": round(random.uniform(-0.15, 0.15), 3)},
+                    {
+                        "feature": "condition_count",
+                        "shap_value": round(random.uniform(-0.15, 0.15), 3),
+                    },
                 ]
 
             results.append(result)
@@ -171,7 +177,7 @@ async def _run_batch_job(job_id: str, cache: CacheDep, job_state: dict) -> None:
         job_state["status"] = "completed"
         job_state["progress"] = len(patient_ids)
         job_state["results"] = results
-        job_state["completed_at"] = datetime.now(timezone.utc).isoformat()
+        job_state["completed_at"] = datetime.now(UTC).isoformat()
         job_state["message"] = f"Screening complete: {len(results)} patients processed"
         await cache.set_json(key, job_state, _JOB_TTL)
         log.info("Batch job %s completed: %d patients", job_id, len(results))

@@ -128,6 +128,7 @@ _GDS_DROP_QUERY = f"CALL gds.graph.drop('{_GDS_GRAPH_NAME}') YIELD graphName"
 
 # ── TypedDict for type-safe return values ─────────────────────────────────────
 
+
 class GraphFeatureRow(TypedDict):
     """One row in the graph features output."""
 
@@ -142,6 +143,7 @@ class GraphFeatureRow(TypedDict):
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def run_gds_write_projection(
     neo4j_uri: str,
@@ -169,8 +171,9 @@ def run_gds_write_projection(
             # Drop stale projection if present from a previous failed run.
             try:
                 session.run(_GDS_DROP_QUERY)
-            except Exception:
-                pass  # No projection to drop — safe to ignore.
+            except Exception as exc:
+                # No projection to drop — safe to ignore.
+                log.debug("GDS drop projection skipped: %s", exc)
 
             result = session.run(_GDS_PROJECT_QUERY).single()
             node_count = result["nodeCount"] if result else 0
@@ -218,16 +221,14 @@ def extract_all_graph_features(
     try:
         with driver.session() as session:
             prevalence_rows: dict[str, dict[str, Any]] = {
-                r["patient_id"]: dict(r)
-                for r in session.run(_PREVALENCE_QUERY)
+                r["patient_id"]: dict(r) for r in session.run(_PREVALENCE_QUERY)
             }
             path_rows: dict[str, int] = {
                 r["patient_id"]: int(r["shortest_path_to_affected"])
                 for r in session.run(_SHORTEST_PATH_QUERY)
             }
             size_rows: dict[str, int] = {
-                r["patient_id"]: int(r["family_size"])
-                for r in session.run(_FAMILY_SIZE_QUERY)
+                r["patient_id"]: int(r["family_size"]) for r in session.run(_FAMILY_SIZE_QUERY)
             }
             clustering_rows: dict[str, float] = {
                 r["patient_id"]: float(r["family_clustering_coefficient"])
@@ -242,15 +243,9 @@ def extract_all_graph_features(
                 GraphFeatureRow(
                     patient_id=pid,
                     affected_relatives_count=int(prev.get("affected_relatives_count", 0)),
-                    weighted_family_prevalence=float(
-                        prev.get("weighted_family_prevalence", 0.0)
-                    ),
-                    first_degree_affected_count=int(
-                        prev.get("first_degree_affected_count", 0)
-                    ),
-                    second_degree_affected_count=int(
-                        prev.get("second_degree_affected_count", 0)
-                    ),
+                    weighted_family_prevalence=float(prev.get("weighted_family_prevalence", 0.0)),
+                    first_degree_affected_count=int(prev.get("first_degree_affected_count", 0)),
+                    second_degree_affected_count=int(prev.get("second_degree_affected_count", 0)),
                     shortest_path_to_affected=path_rows.get(pid, -1),
                     family_size=size_rows.get(pid, 0),
                     family_clustering_coefficient=clustering_rows.get(pid, 0.0),

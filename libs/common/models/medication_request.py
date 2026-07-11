@@ -12,7 +12,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from libs.common.models.physician import Physician
 
 
-class MedicationRequestStatus(str, enum.Enum):
+class MedicationRequestStatus(enum.StrEnum):
     """FHIR medicationrequest-status value set."""
 
     ACTIVE = "active"
@@ -39,7 +39,7 @@ class MedicationRequestStatus(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
-class MedicationRequestIntent(str, enum.Enum):
+class MedicationRequestIntent(enum.StrEnum):
     """FHIR medicationrequest-intent value set."""
 
     PROPOSAL = "proposal"
@@ -69,12 +69,12 @@ class MedicationRequest(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
         nullable=False,
         index=True,
     )
-    encounter_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    encounter_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("encounter.id", ondelete="SET NULL"),
         index=True,
     )
-    requester_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    requester_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("physician.id", ondelete="SET NULL"),
         index=True,
@@ -94,21 +94,21 @@ class MedicationRequest(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     )
 
     # ── FHIR MedicationRequest.medication (RxNorm preferred) ──────────────────
-    medication_code_system: Mapped[Optional[str]] = mapped_column(String(255))
+    medication_code_system: Mapped[str | None] = mapped_column(String(255))
     medication_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    medication_display: Mapped[Optional[str]] = mapped_column(String(500))
+    medication_display: Mapped[str | None] = mapped_column(String(500))
 
     # ── FHIR MedicationRequest.dosageInstruction ──────────────────────────────
-    dosage_text: Mapped[Optional[str]] = mapped_column(String(500))
-    dosage_timing: Mapped[Optional[str]] = mapped_column(String(255))
-    dosage_route: Mapped[Optional[str]] = mapped_column(String(100))
-    dose_quantity: Mapped[Optional[float]] = mapped_column(Numeric(precision=10, scale=3))
-    dose_unit: Mapped[Optional[str]] = mapped_column(String(50))
+    dosage_text: Mapped[str | None] = mapped_column(String(500))
+    dosage_timing: Mapped[str | None] = mapped_column(String(255))
+    dosage_route: Mapped[str | None] = mapped_column(String(100))
+    dose_quantity: Mapped[float | None] = mapped_column(Numeric(precision=10, scale=3))
+    dose_unit: Mapped[str | None] = mapped_column(String(50))
 
     # ── FHIR MedicationRequest.dispenseRequest ────────────────────────────────
-    dispense_quantity: Mapped[Optional[float]] = mapped_column(Numeric(precision=10, scale=3))
-    dispense_unit: Mapped[Optional[str]] = mapped_column(String(50))
-    number_of_repeats: Mapped[Optional[int]] = mapped_column(Integer)
+    dispense_quantity: Mapped[float | None] = mapped_column(Numeric(precision=10, scale=3))
+    dispense_unit: Mapped[str | None] = mapped_column(String(50))
+    number_of_repeats: Mapped[int | None] = mapped_column(Integer)
 
     # ── Temporal ──────────────────────────────────────────────────────────────
     authored_on: Mapped[datetime] = mapped_column(
@@ -116,13 +116,9 @@ class MedicationRequest(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     )
 
     # ── Full FHIR resource ────────────────────────────────────────────────────
-    resource_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    resource_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    patient: Mapped["Patient"] = relationship(back_populates="medication_requests")
-    encounter: Mapped[Optional["Encounter"]] = relationship(
-        back_populates="medication_requests"
-    )
-    requester: Mapped[Optional["Physician"]] = relationship(
-        back_populates="medication_requests"
-    )
+    patient: Mapped[Patient] = relationship(back_populates="medication_requests")
+    encounter: Mapped[Encounter | None] = relationship(back_populates="medication_requests")
+    requester: Mapped[Physician | None] = relationship(back_populates="medication_requests")

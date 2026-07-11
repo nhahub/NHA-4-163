@@ -19,8 +19,8 @@ diagram checks before being registered.  This module supports that check.
 from __future__ import annotations
 
 import logging
-from enum import Enum
-from typing import Callable
+from collections.abc import Callable
+from enum import StrEnum
 
 import numpy as np
 from sklearn.isotonic import IsotonicRegression
@@ -29,10 +29,10 @@ from sklearn.linear_model import LogisticRegression
 log = logging.getLogger(__name__)
 
 
-class CalibrationMethod(str, Enum):
+class CalibrationMethod(StrEnum):
     """Calibration method choices."""
 
-    SIGMOID = "sigmoid"    # Platt scaling
+    SIGMOID = "sigmoid"  # Platt scaling
     ISOTONIC = "isotonic"  # Isotonic regression
 
 

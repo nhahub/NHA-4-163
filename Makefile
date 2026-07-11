@@ -98,8 +98,8 @@ migrate-history: ## Show Alembic migration history
 migrate-sql: ## Print the SQL that upgrade head would run (offline mode)
 	python -m alembic -c schemas/postgres/alembic.ini upgrade head --sql
 
-orchestration-up: check-env ## Start Airflow (scheduler + webserver) alongside base services
-	$(DC) --profile orchestration up -d
+orchestration-up: check-env ## Build + start Airflow (scheduler + webserver) alongside base services
+	$(DC) --profile orchestration up -d --build
 
 orchestration-down: ## Stop Airflow containers (keeps volumes)
 	$(DC) --profile orchestration down

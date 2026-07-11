@@ -1,54 +1,63 @@
+# ── Resource group ─────────────────────────────────────────────────────────────
+
+output "resource_group_name" {
+  description = "Name of the resource group holding all resources."
+  value       = azurerm_resource_group.this.name
+}
+
 # ── Cluster ────────────────────────────────────────────────────────────────────
 
 output "cluster_name" {
-  description = "EKS cluster name."
-  value       = module.eks.cluster_name
-}
-
-output "cluster_endpoint" {
-  description = "EKS API server endpoint."
-  value       = module.eks.cluster_endpoint
+  description = "AKS cluster name."
+  value       = azurerm_kubernetes_cluster.this.name
 }
 
 output "kubeconfig_command" {
   description = "Run this command to update your local kubeconfig."
-  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
+  value       = "az aks get-credentials --resource-group ${azurerm_resource_group.this.name} --name ${azurerm_kubernetes_cluster.this.name}"
 }
 
-# ── ECR ────────────────────────────────────────────────────────────────────────
+# ── Container registry ─────────────────────────────────────────────────────────
 
-output "ecr_repository_url" {
-  description = "ECR repository URL for the healthcare-api image."
-  value       = module.ecr.repository_url
+output "acr_login_server" {
+  description = "Azure Container Registry login server (registry URL)."
+  value       = azurerm_container_registry.this.login_server
 }
 
 output "docker_login_command" {
-  description = "Authenticate Docker with ECR."
-  value       = "aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${module.ecr.registry_url}"
+  description = "Authenticate Docker with ACR."
+  value       = "az acr login --name ${azurerm_container_registry.this.name}"
 }
 
 # ── Database ───────────────────────────────────────────────────────────────────
 
-output "rds_endpoint" {
-  description = "RDS PostgreSQL endpoint (host:port)."
-  value       = module.rds.endpoint
+output "postgres_fqdn" {
+  description = "PostgreSQL Flexible Server fully-qualified domain name."
+  value       = azurerm_postgresql_flexible_server.this.fqdn
   sensitive   = true
 }
 
-output "redis_endpoint" {
-  description = "ElastiCache Redis primary endpoint."
-  value       = module.elasticache.endpoint
+output "postgres_admin_password" {
+  description = "Generated PostgreSQL administrator password."
+  value       = random_password.postgres.result
+  sensitive   = true
+}
+
+output "redis_hostname" {
+  description = "Azure Cache for Redis hostname."
+  value       = azurerm_redis_cache.this.hostname
+  sensitive   = true
+}
+
+output "redis_primary_access_key" {
+  description = "Azure Cache for Redis primary access key."
+  value       = azurerm_redis_cache.this.primary_access_key
   sensitive   = true
 }
 
 # ── Networking ─────────────────────────────────────────────────────────────────
 
-output "vpc_id" {
-  description = "VPC ID."
-  value       = module.vpc.vpc_id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs used by EKS nodes and databases."
-  value       = module.vpc.private_subnet_ids
+output "vnet_id" {
+  description = "Virtual network ID."
+  value       = azurerm_virtual_network.this.id
 }

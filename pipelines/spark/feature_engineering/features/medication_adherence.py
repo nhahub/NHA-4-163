@@ -42,13 +42,15 @@ def build_medication_features(medication_requests_df: DataFrame) -> DataFrame:
     """
     agg_df = medication_requests_df.groupBy("patient_id").agg(
         F.sum(F.when(F.col("status") == "active", 1).otherwise(0))
-         .cast(IntegerType()).alias("active_medication_count"),
+        .cast(IntegerType())
+        .alias("active_medication_count"),
         F.sum(F.when(F.col("status") == "completed", 1).otherwise(0))
-         .cast(IntegerType()).alias("completed_medication_count"),
+        .cast(IntegerType())
+        .alias("completed_medication_count"),
         F.sum(F.when(F.col("status").isin(*_STOPPED_STATUSES), 1).otherwise(0))
-         .cast(IntegerType()).alias("stopped_medication_count"),
-        F.countDistinct("medication_code")
-         .cast(IntegerType()).alias("distinct_medication_count"),
+        .cast(IntegerType())
+        .alias("stopped_medication_count"),
+        F.countDistinct("medication_code").cast(IntegerType()).alias("distinct_medication_count"),
     )
 
     denominator = F.col("completed_medication_count") + F.col("stopped_medication_count")

@@ -7,10 +7,6 @@ is established; SQLAlchemy's metadata introspection is used instead.
 
 from __future__ import annotations
 
-import uuid
-from datetime import date, datetime, timezone
-
-import pytest
 import sqlalchemy as sa
 
 from libs.common.models import (
@@ -23,7 +19,6 @@ from libs.common.models import (
     Observation,
     Patient,
     Physician,
-    encounter_participant,
 )
 from libs.common.models.condition import ClinicalStatus, ConditionSeverity, VerificationStatus
 from libs.common.models.encounter import EncounterStatus
@@ -32,10 +27,10 @@ from libs.common.models.medication_request import MedicationRequestIntent, Medic
 from libs.common.models.observation import ObservationStatus
 from libs.common.models.patient import AdministrativeGender
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _table(model: type) -> sa.Table:
     """Return the SQLAlchemy Table object for a model class."""
@@ -54,13 +49,20 @@ def _index_names(model: type) -> set[str]:
 # Base
 # ---------------------------------------------------------------------------
 
+
 class TestBase:
     def test_all_models_registered(self) -> None:
         table_names = set(Base.metadata.tables.keys())
         expected = {
-            "physician", "patient", "encounter", "encounter_participant",
-            "condition", "observation", "medication_request",
-            "family_member_history", "audit_log",
+            "physician",
+            "patient",
+            "encounter",
+            "encounter_participant",
+            "condition",
+            "observation",
+            "medication_request",
+            "family_member_history",
+            "audit_log",
         }
         assert expected.issubset(table_names)
 
@@ -68,6 +70,7 @@ class TestBase:
 # ---------------------------------------------------------------------------
 # Physician
 # ---------------------------------------------------------------------------
+
 
 class TestPhysicianModel:
     def test_table_name(self) -> None:
@@ -90,14 +93,22 @@ class TestPhysicianModel:
 # Patient
 # ---------------------------------------------------------------------------
 
+
 class TestPatientModel:
     def test_table_name(self) -> None:
         assert Patient.__tablename__ == "patient"
 
     def test_phi_columns_present(self) -> None:
         cols = _column_names(Patient)
-        phi_fields = {"family_name", "given_name", "date_of_birth", "phone", "email",
-                      "address_line", "postal_code"}
+        phi_fields = {
+            "family_name",
+            "given_name",
+            "date_of_birth",
+            "phone",
+            "email",
+            "address_line",
+            "postal_code",
+        }
         assert phi_fields.issubset(cols)
 
     def test_soft_delete_column(self) -> None:
@@ -120,13 +131,19 @@ class TestPatientModel:
 
     def test_relationships_declared(self) -> None:
         rel_names = {r.key for r in Patient.__mapper__.relationships}
-        assert {"conditions", "encounters", "observations",
-                "medication_requests", "family_member_histories"}.issubset(rel_names)
+        assert {
+            "conditions",
+            "encounters",
+            "observations",
+            "medication_requests",
+            "family_member_histories",
+        }.issubset(rel_names)
 
 
 # ---------------------------------------------------------------------------
 # Encounter
 # ---------------------------------------------------------------------------
+
 
 class TestEncounterModel:
     def test_table_name(self) -> None:
@@ -137,8 +154,15 @@ class TestEncounterModel:
         assert "patient.id" in fks
 
     def test_status_enum_covers_fhir(self) -> None:
-        fhir_statuses = {"planned", "arrived", "triaged", "in-progress",
-                         "onleave", "finished", "cancelled"}
+        fhir_statuses = {
+            "planned",
+            "arrived",
+            "triaged",
+            "in-progress",
+            "onleave",
+            "finished",
+            "cancelled",
+        }
         assert fhir_statuses.issubset({s.value for s in EncounterStatus})
 
     def test_encounter_participant_table_exists(self) -> None:
@@ -152,6 +176,7 @@ class TestEncounterModel:
 # ---------------------------------------------------------------------------
 # Condition
 # ---------------------------------------------------------------------------
+
 
 class TestConditionModel:
     def test_table_name(self) -> None:
@@ -184,11 +209,17 @@ class TestConditionModel:
 # Observation
 # ---------------------------------------------------------------------------
 
+
 class TestObservationModel:
     def test_polymorphic_value_columns(self) -> None:
         cols = _column_names(Observation)
-        assert {"value_quantity", "value_unit", "value_string",
-                "value_boolean", "value_codeable_code"}.issubset(cols)
+        assert {
+            "value_quantity",
+            "value_unit",
+            "value_string",
+            "value_boolean",
+            "value_codeable_code",
+        }.issubset(cols)
 
     def test_ref_range_columns(self) -> None:
         cols = _column_names(Observation)
@@ -202,6 +233,7 @@ class TestObservationModel:
 # ---------------------------------------------------------------------------
 # MedicationRequest
 # ---------------------------------------------------------------------------
+
 
 class TestMedicationRequestModel:
     def test_table_name(self) -> None:
@@ -227,6 +259,7 @@ class TestMedicationRequestModel:
 # FamilyMemberHistory
 # ---------------------------------------------------------------------------
 
+
 class TestFamilyMemberHistoryModel:
     def test_table_name(self) -> None:
         assert FamilyMemberHistory.__tablename__ == "family_member_history"
@@ -236,8 +269,11 @@ class TestFamilyMemberHistoryModel:
         assert "ck_fmh_degree_range" in constraint_names
 
     def test_two_fks_to_patient(self) -> None:
-        fks = [fk for fk in _table(FamilyMemberHistory).foreign_keys
-               if fk.target_fullname == "patient.id"]
+        fks = [
+            fk
+            for fk in _table(FamilyMemberHistory).foreign_keys
+            if fk.target_fullname == "patient.id"
+        ]
         assert len(fks) == 2, "Expected two FKs to patient (patient_id and related_patient_id)"
 
     def test_neo4j_synced_defaults_false(self) -> None:
@@ -257,6 +293,7 @@ class TestFamilyMemberHistoryModel:
 # AuditLog
 # ---------------------------------------------------------------------------
 
+
 class TestAuditLogModel:
     def test_table_name(self) -> None:
         assert AuditLog.__tablename__ == "audit_log"
@@ -271,11 +308,18 @@ class TestAuditLogModel:
 
     def test_required_audit_columns(self) -> None:
         cols = _column_names(AuditLog)
-        assert {"actor_id", "actor_type", "action", "resource_type",
-                "outcome", "occurred_at"}.issubset(cols)
+        assert {
+            "actor_id",
+            "actor_type",
+            "action",
+            "resource_type",
+            "outcome",
+            "occurred_at",
+        }.issubset(cols)
 
     def test_ip_address_is_inet(self) -> None:
         from sqlalchemy.dialects.postgresql import INET
+
         col = _table(AuditLog).c["ip_address"]
         assert isinstance(col.type, INET)
 

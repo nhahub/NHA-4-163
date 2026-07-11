@@ -35,7 +35,6 @@ Run locally:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sys
@@ -49,9 +48,9 @@ from pyspark.sql import functions as F
 from pyspark.sql.avro.functions import from_avro
 
 # ── Project root on path (for libs.common imports) ────────────────────────────
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)
-))))
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
@@ -83,6 +82,7 @@ TOPICS = [
 # ---------------------------------------------------------------------------
 # Schema Registry helpers
 # ---------------------------------------------------------------------------
+
 
 def _fetch_schema(registry_url: str, topic: str) -> str:
     """Fetch the latest Avro schema string for a topic from Schema Registry.
@@ -130,6 +130,7 @@ def _load_all_schemas(registry_url: str) -> dict[str, str]:
 # Event parsing + validation helpers
 # ---------------------------------------------------------------------------
 
+
 def _validate_rows(rows: list[dict], model: Any, topic: str) -> tuple[list[dict], list[dict]]:
     """Validate a list of row dicts against a Pydantic model.
 
@@ -156,6 +157,7 @@ def _validate_rows(rows: list[dict], model: Any, topic: str) -> tuple[list[dict]
 # ---------------------------------------------------------------------------
 # Per-topic batch processors
 # ---------------------------------------------------------------------------
+
 
 def _process_patient_batch(
     df: DataFrame,
@@ -334,6 +336,7 @@ def _process_observation_batch(
 # SparkSession builder
 # ---------------------------------------------------------------------------
 
+
 def build_spark(settings: Any) -> SparkSession:
     """Build a Delta-enabled SparkSession with S3/MinIO configuration.
 
@@ -351,7 +354,9 @@ def build_spark(settings: Any) -> SparkSession:
     builder = (
         SparkSession.builder.appName("healthcare-streaming")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+        .config(
+            "spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog"
+        )
         # S3A / MinIO configuration
         .config("spark.hadoop.fs.s3a.endpoint", endpoint)
         .config("spark.hadoop.fs.s3a.access.key", access_key)
@@ -369,6 +374,7 @@ def build_spark(settings: Any) -> SparkSession:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Start the Kafka → Neo4j/Postgres/Delta streaming pipeline."""
     settings = get_settings()
@@ -382,14 +388,11 @@ def main() -> None:
     pg_writer = PostgresWriter.from_settings(settings)
     delta_writer = DeltaWriter.from_settings(spark, settings)
 
-    checkpoint_location = (
-        f"s3a://{settings.minio.bucket_delta}/checkpoints/streaming-job"
-    )
+    checkpoint_location = f"s3a://{settings.minio.bucket_delta}/checkpoints/streaming-job"
 
     # ── Read all topics in one stream ─────────────────────────────────────────
     kafka_df = (
-        spark.readStream
-        .format("kafka")
+        spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", settings.kafka.bootstrap_servers)
         .option("subscribe", ",".join(TOPICS))
         .option("startingOffsets", "latest")
@@ -402,13 +405,13 @@ def main() -> None:
     # ── foreachBatch: route + validate + write ────────────────────────────────
     def process_batch(batch_df: DataFrame, batch_id: int) -> None:
         log.info("Processing micro-batch", extra={"batch_id": batch_id})
-        kwargs = dict(
-            schemas=schemas,
-            neo4j=neo4j_writer,
-            pg=pg_writer,
-            delta=delta_writer,
-            batch_id=batch_id,
-        )
+        kwargs = {
+            "schemas": schemas,
+            "neo4j": neo4j_writer,
+            "pg": pg_writer,
+            "delta": delta_writer,
+            "batch_id": batch_id,
+        }
         _process_patient_batch(batch_df, **kwargs)
         _process_diagnosis_batch(batch_df, **kwargs)
         _process_prescription_batch(batch_df, **kwargs)
@@ -416,8 +419,7 @@ def main() -> None:
         _process_observation_batch(batch_df, **kwargs)
 
     query = (
-        kafka_df.writeStream
-        .foreachBatch(process_batch)
+        kafka_df.writeStream.foreachBatch(process_batch)
         .option("checkpointLocation", checkpoint_location)
         .trigger(processingTime="30 seconds")
         .start()

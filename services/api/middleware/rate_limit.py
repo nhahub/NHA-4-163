@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
@@ -35,11 +35,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 log = logging.getLogger(__name__)
 
-# (path_prefix, max_requests, window_seconds)
+# Each rule is: path prefix, max requests, window in seconds.
 _RATE_RULES: list[tuple[str, int, int]] = [
-    ("/auth/token", 10, 60),   # brute-force guard — per IP
-    ("/predict/",   60, 60),   # prediction endpoints — per user
-    ("/patient/",   30, 60),   # patient endpoints — per user
+    ("/auth/token", 10, 60),  # brute-force guard — per IP
+    ("/predict/", 60, 60),  # prediction endpoints — per user
+    ("/patient/", 30, 60),  # patient endpoints — per user
 ]
 
 _EXCLUDED_PATHS = {"/health", "/ready", "/metrics", "/docs", "/openapi.json", "/redoc"}
@@ -80,7 +80,9 @@ def _identifier(request: Request, use_ip: bool) -> str:
             token = auth[7:]
             try:
                 import jwt as pyjwt
+
                 from libs.common.config import get_settings
+
                 settings = get_settings().jwt
                 payload = pyjwt.decode(
                     token,
@@ -90,12 +92,15 @@ def _identifier(request: Request, use_ip: bool) -> str:
                 sub: str = payload.get("sub", "")
                 if sub:
                     return f"user:{sub}"
-            except Exception:
-                pass  # Fall through to IP-based identification
+            except Exception as exc:
+                # Token parsing failed; fall through to IP-based identification.
+                log.debug("Rate-limit token parse failed: %s", exc)
 
     forwarded = request.headers.get("X-Forwarded-For")
-    ip = forwarded.split(",")[0].strip() if forwarded else (
-        request.client.host if request.client else "unknown"
+    ip = (
+        forwarded.split(",")[0].strip()
+        if forwarded
+        else (request.client.host if request.client else "unknown")
     )
     return f"ip:{ip}"
 

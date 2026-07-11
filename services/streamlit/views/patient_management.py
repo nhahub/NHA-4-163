@@ -10,15 +10,13 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from datetime import date, datetime
-from typing import Any
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+
 import streamlit as st
 
-
 # ── In-memory database for standalone demo ────────────────────────────────────
+
 
 def _get_db() -> sqlite3.Connection:
     """Return a shared in-memory SQLite connection stored in session state."""
@@ -28,7 +26,8 @@ def _get_db() -> sqlite3.Connection:
         _init_tables(conn)
         _seed_demo_data(conn)
         st.session_state["pm_db"] = conn
-    return st.session_state["pm_db"]
+    conn_obj: sqlite3.Connection = st.session_state["pm_db"]
+    return conn_obj
 
 
 def _init_tables(conn: sqlite3.Connection) -> None:
@@ -102,57 +101,231 @@ def _init_tables(conn: sqlite3.Connection) -> None:
 def _seed_demo_data(conn: sqlite3.Connection) -> None:
     """Insert sample data for demonstration purposes."""
     patients = [
-        (str(uuid.uuid4()), "Patient", "A-001", None, "1978-03-15", "female", "Hispanic", None, None, None, "Miami", "FL", "US"),
-        (str(uuid.uuid4()), "Patient", "B-002", None, "1985-07-22", "male", None, "White", None, None, "New York", "NY", "US"),
-        (str(uuid.uuid4()), "Patient", "C-003", None, "1960-11-08", "female", None, "Asian", None, None, "San Francisco", "CA", "US"),
-        (str(uuid.uuid4()), "Patient", "D-004", None, "1992-01-30", "male", "Non-Hispanic", None, None, None, "Chicago", "IL", "US"),
-        (str(uuid.uuid4()), "Patient", "E-005", None, "1945-06-12", "female", None, None, None, None, "Houston", "TX", "US"),
+        (
+            str(uuid.uuid4()),
+            "Patient",
+            "A-001",
+            None,
+            "1978-03-15",
+            "female",
+            "Hispanic",
+            None,
+            None,
+            None,
+            "Miami",
+            "FL",
+            "US",
+        ),
+        (
+            str(uuid.uuid4()),
+            "Patient",
+            "B-002",
+            None,
+            "1985-07-22",
+            "male",
+            None,
+            "White",
+            None,
+            None,
+            "New York",
+            "NY",
+            "US",
+        ),
+        (
+            str(uuid.uuid4()),
+            "Patient",
+            "C-003",
+            None,
+            "1960-11-08",
+            "female",
+            None,
+            "Asian",
+            None,
+            None,
+            "San Francisco",
+            "CA",
+            "US",
+        ),
+        (
+            str(uuid.uuid4()),
+            "Patient",
+            "D-004",
+            None,
+            "1992-01-30",
+            "male",
+            "Non-Hispanic",
+            None,
+            None,
+            None,
+            "Chicago",
+            "IL",
+            "US",
+        ),
+        (
+            str(uuid.uuid4()),
+            "Patient",
+            "E-005",
+            None,
+            "1945-06-12",
+            "female",
+            None,
+            None,
+            None,
+            None,
+            "Houston",
+            "TX",
+            "US",
+        ),
     ]
     conn.executemany(
-        "INSERT INTO patients (id, given_name, family_name, middle_name, date_of_birth, gender, ethnicity, race, phone, email, city, state, country) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO patients (id, given_name, family_name, middle_name, date_of_birth, gender, ethnicity, race, phone, email, city, state, country) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
         patients,
     )
 
     # Add conditions for first few patients
     p0, p1, p2 = patients[0][0], patients[1][0], patients[2][0]
     conditions = [
-        (str(uuid.uuid4()), p0, "E11.9", "ICD-10", "Type 2 diabetes mellitus", "active", "moderate", 1),
+        (
+            str(uuid.uuid4()),
+            p0,
+            "E11.9",
+            "ICD-10",
+            "Type 2 diabetes mellitus",
+            "active",
+            "moderate",
+            1,
+        ),
         (str(uuid.uuid4()), p0, "I10", "ICD-10", "Essential hypertension", "active", "mild", 0),
-        (str(uuid.uuid4()), p1, "J45.20", "ICD-10", "Mild intermittent asthma", "active", "mild", 0),
-        (str(uuid.uuid4()), p2, "C50.9", "ICD-10", "Malignant neoplasm of breast", "remission", "severe", 1),
-        (str(uuid.uuid4()), p2, "I25.10", "ICD-10", "Atherosclerotic heart disease", "active", "moderate", 1),
+        (
+            str(uuid.uuid4()),
+            p1,
+            "J45.20",
+            "ICD-10",
+            "Mild intermittent asthma",
+            "active",
+            "mild",
+            0,
+        ),
+        (
+            str(uuid.uuid4()),
+            p2,
+            "C50.9",
+            "ICD-10",
+            "Malignant neoplasm of breast",
+            "remission",
+            "severe",
+            1,
+        ),
+        (
+            str(uuid.uuid4()),
+            p2,
+            "I25.10",
+            "ICD-10",
+            "Atherosclerotic heart disease",
+            "active",
+            "moderate",
+            1,
+        ),
     ]
     conn.executemany(
-        "INSERT INTO conditions (id, patient_id, code, code_system, code_display, clinical_status, severity, is_hereditary) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO conditions (id, patient_id, code, code_system, code_display, clinical_status, severity, is_hereditary) VALUES (?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
         conditions,
     )
 
     # Family members
     family = [
-        (str(uuid.uuid4()), p0, "MTH", "Mother", 0.5, "female", 0, '[{"code": "E11.9", "display": "Type 2 diabetes"}]'),
-        (str(uuid.uuid4()), p0, "FTH", "Father", 0.5, "male", 1, '[{"code": "I10", "display": "Hypertension"}]'),
-        (str(uuid.uuid4()), p2, "MTH", "Mother", 0.5, "female", 1, '[{"code": "C50.9", "display": "Breast cancer"}]'),
+        (
+            str(uuid.uuid4()),
+            p0,
+            "MTH",
+            "Mother",
+            0.5,
+            "female",
+            0,
+            '[{"code": "E11.9", "display": "Type 2 diabetes"}]',
+        ),
+        (
+            str(uuid.uuid4()),
+            p0,
+            "FTH",
+            "Father",
+            0.5,
+            "male",
+            1,
+            '[{"code": "I10", "display": "Hypertension"}]',
+        ),
+        (
+            str(uuid.uuid4()),
+            p2,
+            "MTH",
+            "Mother",
+            0.5,
+            "female",
+            1,
+            '[{"code": "C50.9", "display": "Breast cancer"}]',
+        ),
     ]
     conn.executemany(
-        "INSERT INTO family_members (id, patient_id, relationship_code, relationship_display, degree_of_relatedness, sex, deceased, conditions_json) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO family_members (id, patient_id, relationship_code, relationship_display, degree_of_relatedness, sex, deceased, conditions_json) VALUES (?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
         family,
     )
 
     # Medications
     meds = [
-        (str(uuid.uuid4()), p0, "860975", "Metformin 500mg", "active", "order", "500mg twice daily", 500, "mg"),
-        (str(uuid.uuid4()), p0, "197361", "Lisinopril 10mg", "active", "order", "10mg once daily", 10, "mg"),
-        (str(uuid.uuid4()), p1, "895994", "Albuterol inhaler", "active", "order", "2 puffs as needed", 90, "mcg"),
-        (str(uuid.uuid4()), p2, "262105", "Tamoxifen 20mg", "completed", "order", "20mg once daily", 20, "mg"),
+        (
+            str(uuid.uuid4()),
+            p0,
+            "860975",
+            "Metformin 500mg",
+            "active",
+            "order",
+            "500mg twice daily",
+            500,
+            "mg",
+        ),
+        (
+            str(uuid.uuid4()),
+            p0,
+            "197361",
+            "Lisinopril 10mg",
+            "active",
+            "order",
+            "10mg once daily",
+            10,
+            "mg",
+        ),
+        (
+            str(uuid.uuid4()),
+            p1,
+            "895994",
+            "Albuterol inhaler",
+            "active",
+            "order",
+            "2 puffs as needed",
+            90,
+            "mcg",
+        ),
+        (
+            str(uuid.uuid4()),
+            p2,
+            "262105",
+            "Tamoxifen 20mg",
+            "completed",
+            "order",
+            "20mg once daily",
+            20,
+            "mg",
+        ),
     ]
     conn.executemany(
-        "INSERT INTO medications (id, patient_id, medication_code, medication_display, status, intent, dosage_text, dose_quantity, dose_unit) VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO medications (id, patient_id, medication_code, medication_display, status, intent, dosage_text, dose_quantity, dose_unit) VALUES (?,?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
         meds,
     )
     conn.commit()
 
 
 # ── Helper functions ──────────────────────────────────────────────────────────
+
 
 def _get_patients(conn: sqlite3.Connection, search: str = "") -> pd.DataFrame:
     """Fetch all non-deleted patients, optionally filtered by search term."""
@@ -168,21 +341,24 @@ def _get_patients(conn: sqlite3.Connection, search: str = "") -> pd.DataFrame:
 def _get_conditions(conn: sqlite3.Connection, patient_id: str) -> pd.DataFrame:
     return pd.read_sql_query(
         "SELECT * FROM conditions WHERE patient_id = ? ORDER BY created_at DESC",
-        conn, params=[patient_id],
+        conn,
+        params=[patient_id],
     )
 
 
 def _get_family(conn: sqlite3.Connection, patient_id: str) -> pd.DataFrame:
     return pd.read_sql_query(
         "SELECT * FROM family_members WHERE patient_id = ? ORDER BY degree_of_relatedness DESC",
-        conn, params=[patient_id],
+        conn,
+        params=[patient_id],
     )
 
 
 def _get_medications(conn: sqlite3.Connection, patient_id: str) -> pd.DataFrame:
     return pd.read_sql_query(
         "SELECT * FROM medications WHERE patient_id = ? ORDER BY created_at DESC",
-        conn, params=[patient_id],
+        conn,
+        params=[patient_id],
     )
 
 
@@ -202,26 +378,35 @@ RELATIONSHIP_CODES = {
 
 # ── Main page renderer ───────────────────────────────────────────────────────
 
+
 def render_patient_management() -> None:
     """Render the Patient Management page."""
     st.header("👤 Patient Management")
-    st.caption("Register, view, and manage patient records, conditions, family history, and medications.")
+    st.caption(
+        "Register, view, and manage patient records, conditions, family history, and medications."
+    )
 
     conn = _get_db()
 
-    tab_list, tab_register, tab_detail = st.tabs([
-        "📋 Patient List",
-        "➕ Register Patient",
-        "🔍 Patient Detail",
-    ])
+    tab_list, tab_register, tab_detail = st.tabs(
+        [
+            "📋 Patient List",
+            "➕ Register Patient",
+            "🔍 Patient Detail",
+        ]
+    )
 
     # ── Tab 1: Patient List ───────────────────────────────────────────────────
     with tab_list:
         col_search, col_filter = st.columns([3, 1])
         with col_search:
-            search = st.text_input("🔍 Search patients", placeholder="Search by name...", key="pm_search")
+            search = st.text_input(
+                "🔍 Search patients", placeholder="Search by name...", key="pm_search"
+            )
         with col_filter:
-            gender_filter = st.selectbox("Gender", ["All", "male", "female", "other", "unknown"], key="pm_gender")
+            gender_filter = st.selectbox(
+                "Gender", ["All", "male", "female", "other", "unknown"], key="pm_gender"
+            )
 
         patients_df = _get_patients(conn, search)
         if gender_filter != "All":
@@ -235,10 +420,14 @@ def render_patient_management() -> None:
             m1.metric("Total Patients", len(patients_df))
             m2.metric("Male", len(patients_df[patients_df["gender"] == "male"]))
             m3.metric("Female", len(patients_df[patients_df["gender"] == "female"]))
-            m4.metric("With Research Consent", len(patients_df[patients_df["research_consent"] == 1]))
+            m4.metric(
+                "With Research Consent", len(patients_df[patients_df["research_consent"] == 1])
+            )
 
             # Display table
-            display_df = patients_df[["id", "given_name", "family_name", "date_of_birth", "gender", "city", "state"]].copy()
+            display_df = patients_df[
+                ["id", "given_name", "family_name", "date_of_birth", "gender", "city", "state"]
+            ].copy()
             display_df.columns = ["ID", "First Name", "Last Name", "DOB", "Gender", "City", "State"]
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
@@ -257,9 +446,16 @@ def render_patient_management() -> None:
 
             r2c1, r2c2, r2c3 = st.columns(3)
             with r2c1:
-                dob = st.date_input("Date of Birth *", value=date(1990, 1, 1), min_value=date(1900, 1, 1), key="reg_dob")
+                dob = st.date_input(
+                    "Date of Birth *",
+                    value=date(1990, 1, 1),
+                    min_value=date(1900, 1, 1),
+                    key="reg_dob",
+                )
             with r2c2:
-                gender = st.selectbox("Gender *", ["male", "female", "other", "unknown"], key="reg_gender")
+                gender = st.selectbox(
+                    "Gender *", ["male", "female", "other", "unknown"], key="reg_gender"
+                )
             with r2c3:
                 ethnicity = st.text_input("Ethnicity", key="reg_eth")
 
@@ -280,7 +476,9 @@ def render_patient_management() -> None:
                 country = st.text_input("Country", value="US", key="reg_country")
 
             consent = st.checkbox("Research Consent Granted", key="reg_consent")
-            submitted = st.form_submit_button("✅ Register Patient", use_container_width=True, type="primary")
+            submitted = st.form_submit_button(
+                "✅ Register Patient", use_container_width=True, type="primary"
+            )
 
             if submitted:
                 if not given_name or not family_name:
@@ -288,8 +486,23 @@ def render_patient_management() -> None:
                 else:
                     patient_id = str(uuid.uuid4())
                     conn.execute(
-                        "INSERT INTO patients (id, given_name, family_name, middle_name, date_of_birth, gender, ethnicity, race, phone, email, city, state, country, research_consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (patient_id, given_name, family_name, middle_name or None, str(dob), gender, ethnicity or None, race or None, phone or None, email or None, city or None, state or None, country, int(consent)),
+                        "INSERT INTO patients (id, given_name, family_name, middle_name, date_of_birth, gender, ethnicity, race, phone, email, city, state, country, research_consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                        (
+                            patient_id,
+                            given_name,
+                            family_name,
+                            middle_name or None,
+                            str(dob),
+                            gender,
+                            ethnicity or None,
+                            race or None,
+                            phone or None,
+                            email or None,
+                            city or None,
+                            state or None,
+                            country,
+                            int(consent),
+                        ),
                     )
                     conn.commit()
                     st.success(f"✅ Patient registered successfully! ID: `{patient_id[:8]}...`")
@@ -328,12 +541,14 @@ def render_patient_management() -> None:
             st.divider()
 
             # Sub-tabs for clinical data
-            sub_cond, sub_fam, sub_med, sub_actions = st.tabs([
-                "🏥 Conditions",
-                "👨‍👩‍👧 Family History",
-                "💊 Medications",
-                "⚙️ Actions",
-            ])
+            sub_cond, sub_fam, sub_med, sub_actions = st.tabs(
+                [
+                    "🏥 Conditions",
+                    "👨‍👩‍👧 Family History",
+                    "💊 Medications",
+                    "⚙️ Actions",
+                ]
+            )
 
             # ── Conditions sub-tab ────────────────────────────────────────────
             with sub_cond:
@@ -343,18 +558,40 @@ def render_patient_management() -> None:
                     with st.form("add_condition_form", clear_on_submit=True):
                         cc1, cc2 = st.columns(2)
                         with cc1:
-                            code = st.text_input("ICD-10 Code *", placeholder="e.g., E11.9", key="cond_code")
-                            code_display = st.text_input("Display Name", placeholder="e.g., Type 2 diabetes", key="cond_display")
+                            code = st.text_input(
+                                "ICD-10 Code *", placeholder="e.g., E11.9", key="cond_code"
+                            )
+                            code_display = st.text_input(
+                                "Display Name",
+                                placeholder="e.g., Type 2 diabetes",
+                                key="cond_display",
+                            )
                         with cc2:
-                            clin_status = st.selectbox("Clinical Status", ["active", "confirmed", "remission", "resolved", "inactive"], key="cond_status")
-                            severity = st.selectbox("Severity", ["mild", "moderate", "severe"], key="cond_severity")
+                            clin_status = st.selectbox(
+                                "Clinical Status",
+                                ["active", "confirmed", "remission", "resolved", "inactive"],
+                                key="cond_status",
+                            )
+                            severity = st.selectbox(
+                                "Severity", ["mild", "moderate", "severe"], key="cond_severity"
+                            )
                         is_hereditary = st.checkbox("Hereditary Condition", key="cond_hered")
-                        cond_submit = st.form_submit_button("Add Condition", type="primary", use_container_width=True)
+                        cond_submit = st.form_submit_button(
+                            "Add Condition", type="primary", use_container_width=True
+                        )
 
                         if cond_submit and code:
                             conn.execute(
-                                "INSERT INTO conditions (id, patient_id, code, code_display, clinical_status, severity, is_hereditary) VALUES (?,?,?,?,?,?,?)",
-                                (str(uuid.uuid4()), selected_id, code, code_display or None, clin_status, severity, int(is_hereditary)),
+                                "INSERT INTO conditions (id, patient_id, code, code_display, clinical_status, severity, is_hereditary) VALUES (?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                                (
+                                    str(uuid.uuid4()),
+                                    selected_id,
+                                    code,
+                                    code_display or None,
+                                    clin_status,
+                                    severity,
+                                    int(is_hereditary),
+                                ),
                             )
                             conn.commit()
                             st.success(f"✅ Condition `{code}` added!")
@@ -365,10 +602,15 @@ def render_patient_management() -> None:
                 else:
                     for _, cond in conditions_df.iterrows():
                         hered_badge = " 🧬" if cond["is_hereditary"] else ""
-                        status_color = {"active": "🔴", "confirmed": "🟡", "remission": "🟢", "resolved": "✅"}.get(cond["clinical_status"], "⚪")
+                        status_color = {
+                            "active": "🔴",
+                            "confirmed": "🟡",
+                            "remission": "🟢",
+                            "resolved": "✅",
+                        }.get(cond["clinical_status"], "⚪")
                         st.markdown(
                             f"{status_color} **{cond['code']}** — {cond['code_display'] or 'N/A'} "
-                            f"| Status: `{cond['clinical_status']}` | Severity: `{cond['severity'] or 'N/A'}`{hered_badge}"
+                            f"| Status: `{cond['clinical_status']}` | Severity: `{cond['severity'] or 'N/A'}`{hered_badge}"  # noqa: E501 — long literal (SQL/markdown), not splittable
                         )
 
             # ── Family History sub-tab ────────────────────────────────────────
@@ -389,24 +631,50 @@ def render_patient_management() -> None:
                         with fc2:
                             degree = st.number_input(
                                 "Degree of Relatedness",
-                                value=RELATIONSHIP_CODES[rel_code][1],
-                                min_value=0.0, max_value=1.0, step=0.125,
+                                value=RELATIONSHIP_CODES[str(rel_code)][1],
+                                min_value=0.0,
+                                max_value=1.0,
+                                step=0.125,
                                 key="fam_degree",
                             )
                             fam_deceased = st.checkbox("Deceased", key="fam_deceased")
 
-                        fam_conditions = st.text_input("Conditions (comma-separated ICD-10 codes)", key="fam_conds")
-                        fam_submit = st.form_submit_button("Add Family Member", type="primary", use_container_width=True)
+                        fam_conditions = st.text_input(
+                            "Conditions (comma-separated ICD-10 codes)", key="fam_conds"
+                        )
+                        fam_submit = st.form_submit_button(
+                            "Add Family Member", type="primary", use_container_width=True
+                        )
 
                         if fam_submit:
                             import json
-                            conds_json = json.dumps([{"code": c.strip()} for c in fam_conditions.split(",") if c.strip()]) if fam_conditions else "[]"
+
+                            conds_json = (
+                                json.dumps(
+                                    [
+                                        {"code": c.strip()}
+                                        for c in fam_conditions.split(",")
+                                        if c.strip()
+                                    ]
+                                )
+                                if fam_conditions
+                                else "[]"
+                            )
                             conn.execute(
-                                "INSERT INTO family_members (id, patient_id, relationship_code, relationship_display, degree_of_relatedness, sex, deceased, conditions_json) VALUES (?,?,?,?,?,?,?,?)",
-                                (str(uuid.uuid4()), selected_id, rel_code, RELATIONSHIP_CODES[rel_code][0], degree, sex, int(fam_deceased), conds_json),
+                                "INSERT INTO family_members (id, patient_id, relationship_code, relationship_display, degree_of_relatedness, sex, deceased, conditions_json) VALUES (?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                                (
+                                    str(uuid.uuid4()),
+                                    selected_id,
+                                    rel_code,
+                                    RELATIONSHIP_CODES[str(rel_code)][0],
+                                    degree,
+                                    sex,
+                                    int(fam_deceased),
+                                    conds_json,
+                                ),
                             )
                             conn.commit()
-                            st.success(f"✅ {RELATIONSHIP_CODES[rel_code][0]} added!")
+                            st.success(f"✅ {RELATIONSHIP_CODES[str(rel_code)][0]} added!")
                             st.rerun()
 
                 if family_df.empty:
@@ -428,18 +696,39 @@ def render_patient_management() -> None:
                     with st.form("add_med_form", clear_on_submit=True):
                         mc1, mc2 = st.columns(2)
                         with mc1:
-                            med_code = st.text_input("RxNorm Code *", placeholder="e.g., 860975", key="med_code")
-                            med_display = st.text_input("Medication Name", placeholder="e.g., Metformin 500mg", key="med_display")
+                            med_code = st.text_input(
+                                "RxNorm Code *", placeholder="e.g., 860975", key="med_code"
+                            )
+                            med_display = st.text_input(
+                                "Medication Name",
+                                placeholder="e.g., Metformin 500mg",
+                                key="med_display",
+                            )
                         with mc2:
-                            med_status = st.selectbox("Status", ["active", "completed", "stopped", "on-hold"], key="med_status")
-                            dosage = st.text_input("Dosage", placeholder="e.g., 500mg twice daily", key="med_dosage")
+                            med_status = st.selectbox(
+                                "Status",
+                                ["active", "completed", "stopped", "on-hold"],
+                                key="med_status",
+                            )
+                            dosage = st.text_input(
+                                "Dosage", placeholder="e.g., 500mg twice daily", key="med_dosage"
+                            )
 
-                        med_submit = st.form_submit_button("Add Medication", type="primary", use_container_width=True)
+                        med_submit = st.form_submit_button(
+                            "Add Medication", type="primary", use_container_width=True
+                        )
 
                         if med_submit and med_code:
                             conn.execute(
-                                "INSERT INTO medications (id, patient_id, medication_code, medication_display, status, dosage_text) VALUES (?,?,?,?,?,?)",
-                                (str(uuid.uuid4()), selected_id, med_code, med_display or None, med_status, dosage or None),
+                                "INSERT INTO medications (id, patient_id, medication_code, medication_display, status, dosage_text) VALUES (?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+                                (
+                                    str(uuid.uuid4()),
+                                    selected_id,
+                                    med_code,
+                                    med_display or None,
+                                    med_status,
+                                    dosage or None,
+                                ),
                             )
                             conn.commit()
                             st.success(f"✅ Medication `{med_display or med_code}` added!")
@@ -449,9 +738,14 @@ def render_patient_management() -> None:
                     st.info("No medications recorded for this patient.")
                 else:
                     for _, med in meds_df.iterrows():
-                        status_icon = {"active": "💊", "completed": "✅", "stopped": "🛑", "on-hold": "⏸️"}.get(med["status"], "💊")
+                        status_icon = {
+                            "active": "💊",
+                            "completed": "✅",
+                            "stopped": "🛑",
+                            "on-hold": "⏸️",
+                        }.get(med["status"], "💊")
                         st.markdown(
-                            f"{status_icon} **{med['medication_display'] or med['medication_code']}** "
+                            f"{status_icon} **{med['medication_display'] or med['medication_code']}** "  # noqa: E501 — long literal (SQL/markdown), not splittable
                             f"(`{med['medication_code']}`) | "
                             f"Status: `{med['status']}` | Dosage: `{med['dosage_text'] or 'N/A'}`"
                         )

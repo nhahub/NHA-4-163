@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -31,6 +31,11 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_MODEL_NAME = "hereditary-risk-xgboost"
 _DEFAULT_MODEL_STAGE = "Staging"
+
+
+def _to_float(value: object) -> float:
+    """Coerce an untyped feature value to float, defaulting non-numerics to 0.0."""
+    return float(value) if isinstance(value, (int, float)) else 0.0
 
 
 @dataclass
@@ -58,7 +63,7 @@ class ModelService:
     """
 
     def __init__(self) -> None:
-        self._xgb_model: object | None = None  # xgboost.XGBClassifier
+        self._xgb_model: Any = None  # xgboost.XGBClassifier (untyped third-party)
         self.info: ModelInfo | None = None
 
     def load(
@@ -102,7 +107,7 @@ class ModelService:
 
         # Feature names are stored as a tag by train_xgboost.py (or derived from booster)
         try:
-            feat_names = list(self._xgb_model.feature_names_in_)  # type: ignore[union-attr]
+            feat_names = list(self._xgb_model.feature_names_in_)
         except AttributeError:
             # Fall back to the registry's feature_columns if available
             feat_names = run_data.tags.get("feature_columns", "").split(",") or []
@@ -115,10 +120,13 @@ class ModelService:
         )
         log.info(
             "Model loaded: %s v%s  (run_id=%s, features=%d)",
-            model_name, mv.version, mv.run_id, len(feat_names),
+            model_name,
+            mv.version,
+            mv.run_id,
+            len(feat_names),
         )
 
-    def _build_input(self, features: dict[str, object]) -> np.ndarray:
+    def _build_input(self, features: dict[str, object]) -> np.ndarray[Any, Any]:
         """Build an ordered numpy row from a feature dict.
 
         Unknown features default to 0.  None values default to 0
@@ -132,7 +140,7 @@ class ModelService:
         """
         if self.info is None:
             raise RuntimeError("Model is not loaded")
-        row = [float(features.get(name) or 0.0) for name in self.info.feature_names]
+        row = [_to_float(features.get(name)) for name in self.info.feature_names]
         return np.array([row], dtype=np.float32)
 
     def predict_proba_sync(self, features: dict[str, object]) -> float:
@@ -150,7 +158,7 @@ class ModelService:
         if self._xgb_model is None:
             raise RuntimeError("Model is not loaded — call load() at startup")
         X = self._build_input(features)
-        proba: np.ndarray = self._xgb_model.predict_proba(X)  # type: ignore[union-attr]
+        proba: np.ndarray[Any, Any] = self._xgb_model.predict_proba(X)
         return float(proba[0, 1])
 
     async def predict_proba(self, features: dict[str, object]) -> float:
@@ -168,7 +176,7 @@ class ModelService:
         self,
         features: dict[str, object],
         top_n: int = 5,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Compute top-N SHAP contributions synchronously.
 
         Args:
@@ -194,7 +202,7 @@ class ModelService:
         sv = explainer.shap_values(X)[0]  # shape: (n_features,)
 
         pairs = sorted(
-            zip(self.info.feature_names, sv.tolist()),
+            zip(self.info.feature_names, sv.tolist(), strict=False),
             key=lambda x: abs(x[1]),
             reverse=True,
         )[:top_n]
@@ -202,7 +210,7 @@ class ModelService:
         return [
             {
                 "feature": name,
-                "raw_value": float(features.get(name) or 0.0),
+                "raw_value": _to_float(features.get(name)),
                 "shap_value": float(val),
                 "direction": "increases_risk" if val > 0 else "decreases_risk",
             }
@@ -213,7 +221,7 @@ class ModelService:
         self,
         features: dict[str, object],
         top_n: int = 5,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Async wrapper around ``shap_values_sync``.
 
         Args:

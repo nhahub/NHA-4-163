@@ -114,6 +114,7 @@ class FairnessReport:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _group_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -135,7 +136,7 @@ def _group_metrics(
 
     n = len(y_true)
     n_pos = int(y_true.sum())
-    n_neg = n - n_pos
+    n - n_pos
 
     tp = int(((y_pred == 1) & (y_true == 1)).sum())
     fp = int(((y_pred == 1) & (y_true == 0)).sum())
@@ -168,6 +169,7 @@ def _group_metrics(
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def compute_fairness_report(
     y_true: np.ndarray,
@@ -202,14 +204,22 @@ def compute_fairness_report(
         if mask.sum() < min_group_size:
             log.warning(
                 "Group '%s'='%s' has only %d samples — excluded from gap calculations",
-                col_name, grp, mask.sum(),
+                col_name,
+                grp,
+                mask.sum(),
             )
             continue
         gm = _group_metrics(y_true[mask], y_pred[mask], y_proba[mask], grp)
         group_results[grp] = gm
         log.info(
             "Fairness [%s=%s]: n=%d  PPR=%.3f  TPR=%.3f  FPR=%.3f  Brier=%.4f",
-            col_name, grp, gm.n, gm.predicted_positive_rate, gm.tpr, gm.fpr, gm.brier_score,
+            col_name,
+            grp,
+            gm.n,
+            gm.predicted_positive_rate,
+            gm.tpr,
+            gm.fpr,
+            gm.brier_score,
         )
 
     def _gap(values: list[float]) -> float:

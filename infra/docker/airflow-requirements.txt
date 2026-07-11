@@ -1,0 +1,33 @@
+# Third-party libraries imported by the project's Airflow DAG tasks.
+# Installed on top of apache/airflow:2.9.1 by infra/docker/airflow.Dockerfile.
+#
+# Versions of libraries that overlap Airflow's own pinned dependencies
+# (pandas, numpy, requests, cryptography, pydantic) are intentionally left to
+# Airflow so pip resolves one mutually-compatible set.  Specialised client and
+# ML libraries are pinned to match the project's top-level requirements.txt so
+# DAG task code behaves identically to the rest of the platform.
+
+# Object storage (MinIO / S3) — batch_fhir_ingestion
+boto3
+
+# Databases
+psycopg2-binary==2.9.9
+neo4j==5.19.0
+
+# Spark — feature_engineering + identity-resolution tasks
+pyspark==3.5.1
+delta-spark==3.1.0
+
+# ML / experiment tracking — model_training + model_monitoring
+mlflow==2.13.0
+xgboost==2.0.3
+scikit-learn==1.4.2
+
+# Data quality — great-expectations suites in validate_* tasks
+great-expectations==0.18.12
+
+# Config / contracts shared via libs.common.config
+pydantic-settings==2.2.1
+
+# Kafka producer used by downstream notify tasks
+confluent-kafka==2.3.0

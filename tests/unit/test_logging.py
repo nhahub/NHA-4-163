@@ -41,6 +41,7 @@ class TestConfigureLogging:
         root.handlers.clear()
         handler = logging.StreamHandler(stream)
         from libs.common.logging import _JsonFormatter
+
         handler.setFormatter(_JsonFormatter())
         root.addHandler(handler)
 
@@ -61,6 +62,7 @@ class TestConfigureLogging:
         handler = logging.StreamHandler(stream)
         from libs.common.logging import _JsonFormatter
         from libs.common.phi import PhiRedactingFilter
+
         handler.setFormatter(_JsonFormatter())
         handler.addFilter(PhiRedactingFilter())
         root.addHandler(handler)

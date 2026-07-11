@@ -23,15 +23,12 @@ from services.api.schemas.responses import (
 )
 from services.api.services.feature_service import (
     _ICD10_CHAPTERS,
-    get_family_profile_sync,
 )
 
 router = APIRouter(prefix="/patient", tags=["patients"])
 
 # Map feature-flag names back to chapter label strings
-_CHAPTER_LABEL: dict[str, str] = {
-    v: v.removeprefix("has_") for v in set(_ICD10_CHAPTERS.values())
-}
+_CHAPTER_LABEL: dict[str, str] = {v: v.removeprefix("has_") for v in set(_ICD10_CHAPTERS.values())}
 
 
 def _build_profile_response(
@@ -170,7 +167,7 @@ async def get_family_risk_profile(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
     response = _build_profile_response(request_id, pid_str, relatives, cached=False)
 

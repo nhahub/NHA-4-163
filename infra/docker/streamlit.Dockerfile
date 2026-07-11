@@ -58,11 +58,14 @@ RUN useradd --no-create-home --shell /bin/false appuser
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Some mlflow imports expect pkg_resources from setuptools at runtime.
+RUN pip install --no-cache-dir setuptools==68.2.2
+
 # Working directory
 WORKDIR /app
 
 # Copy application code (from monorepo root context)
-COPY services/streamlit .
+COPY services ./services
 COPY libs /app/libs
 COPY ml /app/ml
 
@@ -80,4 +83,4 @@ HEALTHCHECK --interval=15s --timeout=10s --retries=5 --start-period=45s \
 # Run Streamlit application
 USER appuser
 ENTRYPOINT ["streamlit", "run"]
-CMD ["app.py"]
+CMD ["services/streamlit/app.py"]

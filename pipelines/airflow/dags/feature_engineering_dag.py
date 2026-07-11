@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowSkipException
@@ -54,7 +54,7 @@ _DEFAULT_ARGS = {
     dag_id="feature_engineering",
     description="Nightly feature engineering: Neo4j GDS + Spark Delta feature store",
     schedule="0 3 * * *",
-    start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2024, 1, 1, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
     default_args=_DEFAULT_ARGS,
@@ -174,7 +174,6 @@ def feature_engineering_dag() -> None:
         import os
 
         import pandas as pd
-        from great_expectations.core.batch import RuntimeBatchRequest
         from great_expectations.data_context import EphemeralDataContext
         from great_expectations.data_context.types.base import (
             DataContextConfig,
@@ -187,16 +186,18 @@ def feature_engineering_dag() -> None:
         delta_base = os.environ.get("DELTA_BASE", "s3a://healthcare-delta")
         vector_path = f"{delta_base}/features/patient_feature_vector"
 
-        # Read a sample via pandas (SparkSession reuse from job is not guaranteed)
-        try:
-            cfg = get_settings()
-            from pyspark.sql import SparkSession
+        # Build a dedicated Spark session to read the Delta table.  Each Airflow
+        # task runs in its own process, so the upstream job's session is never
+        # reachable here — create one configured identically (Delta + MinIO S3A).
+        from pipelines.spark.feature_engineering.job import _build_spark_session
 
-            spark = SparkSession.getActiveSession()
-            if spark is None:
-                raise AirflowSkipException(
-                    "No active SparkSession — skipping validation (non-critical)"
-                )
+        minio = get_settings().minio
+        spark = _build_spark_session(
+            minio_endpoint=str(minio.endpoint),
+            access_key=minio.access_key,
+            secret_key=minio.secret_key.get_secret_value(),
+        )
+        try:
             sample_df: pd.DataFrame = (
                 spark.read.format("delta")
                 .load(vector_path)
@@ -204,19 +205,17 @@ def feature_engineering_dag() -> None:
                 .limit(5000)
                 .toPandas()
             )
-        except AirflowSkipException:
-            raise
         except Exception as exc:
             log.warning("Could not read feature vector for validation: %s", exc)
             raise AirflowSkipException("Feature vector not readable — skipping validation") from exc
+        finally:
+            spark.stop()
 
         if sample_df.empty:
             raise ValueError(f"Feature vector is empty for feature_date={run_date}")
 
         context = EphemeralDataContext(
-            project_config=DataContextConfig(
-                store_backend_defaults=InMemoryStoreBackendDefaults()
-            )
+            project_config=DataContextConfig(store_backend_defaults=InMemoryStoreBackendDefaults())
         )
         ds = context.sources.add_pandas("feature_validation")
         asset = ds.add_dataframe_asset("feature_vector_sample")
@@ -229,10 +228,14 @@ def feature_engineering_dag() -> None:
             if not result.get("success"):
                 failures.append(name)
 
-        _check(validator.expect_column_values_to_not_be_null("patient_id").to_json_dict(),
-               "patient_id_not_null")
-        _check(validator.expect_table_row_count_to_be_between(min_value=1).to_json_dict(),
-               "table_non_empty")
+        _check(
+            validator.expect_column_values_to_not_be_null("patient_id").to_json_dict(),
+            "patient_id_not_null",
+        )
+        _check(
+            validator.expect_table_row_count_to_be_between(min_value=1).to_json_dict(),
+            "table_non_empty",
+        )
         _check(
             validator.expect_column_values_to_be_between(
                 "age_years", min_value=0, max_value=150, mostly=0.99
@@ -245,18 +248,14 @@ def feature_engineering_dag() -> None:
             ).to_json_dict(),
             "weighted_prevalence_non_negative",
         )
-        for flag_col in (
-            "gender_male", "gender_female", "has_cardiovascular", "has_oncological"
-        ):
+        for flag_col in ("gender_male", "gender_female", "has_cardiovascular", "has_oncological"):
             _check(
                 validator.expect_column_values_to_be_in_set(flag_col, {0, 1}).to_json_dict(),
                 f"{flag_col}_binary",
             )
 
         if failures:
-            raise ValueError(
-                f"Feature output validation failed for {run_date}: {failures}"
-            )
+            raise ValueError(f"Feature output validation failed for {run_date}: {failures}")
         log.info("Feature output validation passed for %s", run_date)
 
     # ── Wire task dependencies ────────────────────────────────────────────────

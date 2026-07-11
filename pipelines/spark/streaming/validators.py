@@ -17,9 +17,8 @@ a lookup table loaded from CMS — defer to Phase 5 feature engineering.
 from __future__ import annotations
 
 import re
-import uuid
 from datetime import date, datetime
-from typing import Annotated, Any, ClassVar, Optional
+from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -49,6 +48,7 @@ def _require_uuid(v: str, field_name: str = "id") -> str:
 # Event models
 # ---------------------------------------------------------------------------
 
+
 class PatientCreatedEvent(BaseModel):
     """Validated representation of a ``patient.created`` Kafka event."""
 
@@ -57,15 +57,15 @@ class PatientCreatedEvent(BaseModel):
     event_version: str = "1.0"
     source_system: str
     patient_id: str
-    external_id: Optional[str] = None
-    identifier_system: Optional[str] = None
-    family_name: Optional[str] = None
-    given_name: Optional[str] = None
-    middle_name: Optional[str] = None
-    date_of_birth: Optional[date] = None
-    gender: Optional[str] = None
-    ethnicity: Optional[str] = None
-    race: Optional[str] = None
+    external_id: str | None = None
+    identifier_system: str | None = None
+    family_name: str | None = None
+    given_name: str | None = None
+    middle_name: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    ethnicity: str | None = None
+    race: str | None = None
     deceased: bool = False
     research_consent: bool = False
 
@@ -77,7 +77,7 @@ class PatientCreatedEvent(BaseModel):
 
     @field_validator("gender")
     @classmethod
-    def validate_gender(cls, v: Optional[str]) -> Optional[str]:
+    def validate_gender(cls, v: str | None) -> str | None:
         """Validate FHIR AdministrativeGender value set."""
         if v is not None and v not in {"male", "female", "other", "unknown"}:
             raise ValueError(f"Invalid gender value: {v!r}")
@@ -85,7 +85,7 @@ class PatientCreatedEvent(BaseModel):
 
     @field_validator("date_of_birth")
     @classmethod
-    def no_future_dob(cls, v: Optional[date]) -> Optional[date]:
+    def no_future_dob(cls, v: date | None) -> date | None:
         """Date of birth must not be in the future."""
         if v is not None and v > date.today():
             raise ValueError(f"date_of_birth {v} is in the future")
@@ -101,16 +101,16 @@ class DiagnosisAddedEvent(BaseModel):
     source_system: str
     condition_id: str
     patient_id: str
-    encounter_id: Optional[str] = None
-    recorder_id: Optional[str] = None
+    encounter_id: str | None = None
+    recorder_id: str | None = None
     clinical_status: str
-    verification_status: Optional[str] = None
-    severity: Optional[str] = None
+    verification_status: str | None = None
+    severity: str | None = None
     code_system: str
     code: str
-    code_display: Optional[str] = None
-    onset_datetime: Optional[datetime] = None
-    onset_age_years: Optional[int] = None
+    code_display: str | None = None
+    onset_datetime: datetime | None = None
+    onset_age_years: int | None = None
     is_hereditary: bool = False
     family_history_flag: bool = False
 
@@ -143,7 +143,7 @@ class DiagnosisAddedEvent(BaseModel):
 
     @field_validator("onset_age_years")
     @classmethod
-    def valid_age(cls, v: Optional[int]) -> Optional[int]:
+    def valid_age(cls, v: int | None) -> int | None:
         if v is not None and not (0 <= v <= 130):
             raise ValueError(f"onset_age_years out of range: {v}")
         return v
@@ -158,22 +158,30 @@ class PrescriptionIssuedEvent(BaseModel):
     source_system: str
     medication_request_id: str
     patient_id: str
-    encounter_id: Optional[str] = None
-    requester_id: Optional[str] = None
+    encounter_id: str | None = None
+    requester_id: str | None = None
     status: str
     intent: str
-    medication_code_system: Optional[str] = None
+    medication_code_system: str | None = None
     medication_code: str
-    medication_display: Optional[str] = None
-    dosage_text: Optional[str] = None
-    dosage_route: Optional[str] = None
-    dose_quantity: Optional[float] = None
-    dose_unit: Optional[str] = None
+    medication_display: str | None = None
+    dosage_text: str | None = None
+    dosage_route: str | None = None
+    dose_quantity: float | None = None
+    dose_unit: str | None = None
     authored_on: datetime
 
     _VALID_STATUSES: ClassVar[frozenset[str]] = frozenset(
-        {"active", "on-hold", "cancelled", "completed",
-         "entered-in-error", "stopped", "draft", "unknown"}
+        {
+            "active",
+            "on-hold",
+            "cancelled",
+            "completed",
+            "entered-in-error",
+            "stopped",
+            "draft",
+            "unknown",
+        }
     )
 
     @field_validator("patient_id", "medication_request_id", "event_id")
@@ -190,7 +198,7 @@ class PrescriptionIssuedEvent(BaseModel):
 
     @field_validator("dose_quantity")
     @classmethod
-    def positive_dose(cls, v: Optional[float]) -> Optional[float]:
+    def positive_dose(cls, v: float | None) -> float | None:
         if v is not None and v <= 0:
             raise ValueError(f"dose_quantity must be positive: {v}")
         return v
@@ -205,14 +213,14 @@ class RelativeLinkedEvent(BaseModel):
     source_system: str
     fmh_id: str
     patient_id: str
-    related_patient_id: Optional[str] = None
+    related_patient_id: str | None = None
     relationship_code: str
-    relationship_display: Optional[str] = None
-    degree_of_relatedness: Optional[float] = None
-    sex: Optional[str] = None
-    born_date: Optional[date] = None
-    deceased: Optional[bool] = None
-    deceased_age_years: Optional[int] = None
+    relationship_display: str | None = None
+    degree_of_relatedness: float | None = None
+    sex: str | None = None
+    born_date: date | None = None
+    deceased: bool | None = None
+    deceased_age_years: int | None = None
     conditions: list[dict[str, Any]] = Field(default_factory=list)
 
     @field_validator("patient_id", "fmh_id", "event_id")
@@ -222,13 +230,13 @@ class RelativeLinkedEvent(BaseModel):
 
     @field_validator("degree_of_relatedness")
     @classmethod
-    def valid_degree(cls, v: Optional[float]) -> Optional[float]:
+    def valid_degree(cls, v: float | None) -> float | None:
         if v is not None and not (0.0 <= v <= 1.0):
             raise ValueError(f"degree_of_relatedness must be 0–1: {v}")
         return v
 
     @model_validator(mode="after")
-    def deceased_age_requires_deceased(self) -> "RelativeLinkedEvent":
+    def deceased_age_requires_deceased(self) -> RelativeLinkedEvent:
         if self.deceased_age_years is not None and not self.deceased:
             raise ValueError("deceased_age_years requires deceased=true")
         return self
@@ -243,26 +251,34 @@ class ObservationRecordedEvent(BaseModel):
     source_system: str
     observation_id: str
     patient_id: str
-    encounter_id: Optional[str] = None
+    encounter_id: str | None = None
     status: str
-    category: Optional[str] = None
+    category: str | None = None
     code_system: str
     code: str
-    code_display: Optional[str] = None
+    code_display: str | None = None
     effective_datetime: datetime
-    value_quantity: Optional[float] = None
-    value_unit: Optional[str] = None
-    value_string: Optional[str] = None
-    value_boolean: Optional[bool] = None
-    value_codeable_code: Optional[str] = None
-    value_codeable_display: Optional[str] = None
-    ref_range_low: Optional[float] = None
-    ref_range_high: Optional[float] = None
-    interpretation: Optional[str] = None
+    value_quantity: float | None = None
+    value_unit: str | None = None
+    value_string: str | None = None
+    value_boolean: bool | None = None
+    value_codeable_code: str | None = None
+    value_codeable_display: str | None = None
+    ref_range_low: float | None = None
+    ref_range_high: float | None = None
+    interpretation: str | None = None
 
     _VALID_STATUSES: ClassVar[frozenset[str]] = frozenset(
-        {"registered", "preliminary", "final", "amended",
-         "corrected", "cancelled", "entered-in-error", "unknown"}
+        {
+            "registered",
+            "preliminary",
+            "final",
+            "amended",
+            "corrected",
+            "cancelled",
+            "entered-in-error",
+            "unknown",
+        }
     )
 
     @field_validator("patient_id", "observation_id", "event_id")
@@ -278,11 +294,13 @@ class ObservationRecordedEvent(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def exactly_one_value(self) -> "ObservationRecordedEvent":
+    def exactly_one_value(self) -> ObservationRecordedEvent:
         """Warn if no value is populated — not a hard error for legacy data."""
         values = [
-            self.value_quantity, self.value_string,
-            self.value_boolean, self.value_codeable_code,
+            self.value_quantity,
+            self.value_string,
+            self.value_boolean,
+            self.value_codeable_code,
         ]
         if all(v is None for v in values):
             # Not raised — some observations legitimately have no value (e.g., grouping obs).
@@ -290,8 +308,11 @@ class ObservationRecordedEvent(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def ref_range_order(self) -> "ObservationRecordedEvent":
-        if (self.ref_range_low is not None and self.ref_range_high is not None
-                and self.ref_range_low > self.ref_range_high):
+    def ref_range_order(self) -> ObservationRecordedEvent:
+        if (
+            self.ref_range_low is not None
+            and self.ref_range_high is not None
+            and self.ref_range_low > self.ref_range_high
+        ):
             raise ValueError("ref_range_low must be <= ref_range_high")
         return self

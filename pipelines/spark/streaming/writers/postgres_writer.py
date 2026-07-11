@@ -13,8 +13,9 @@ the Spark JDBC writer only supports INSERT/OVERWRITE, not ON CONFLICT.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 import psycopg2
 from pyspark.sql import DataFrame, Row
@@ -257,7 +258,7 @@ class PostgresWriter:
         df.foreachPartition(write_partition)
 
     @classmethod
-    def from_settings(cls, settings: Any) -> "PostgresWriter":
+    def from_settings(cls, settings: Any) -> PostgresWriter:
         """Construct from the project Settings object.
 
         Args:

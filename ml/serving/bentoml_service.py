@@ -30,10 +30,13 @@ BENTO_MODEL_TAG       Override the BentoML model tag used at serve time
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 _DEFAULT_MODEL_NAME = "hereditary-risk-xgboost"
 _DEFAULT_STAGE = "Staging"
@@ -153,7 +156,7 @@ try:
                 sv = explainer.shap_values(row)[0]
                 top_n: int = int(body.get("top_n_factors", 5))
                 pairs = sorted(
-                    zip(feat_names, sv.tolist()),
+                    zip(feat_names, sv.tolist(), strict=False),
                     key=lambda x: abs(x[1]),
                     reverse=True,
                 )[:top_n]
@@ -166,8 +169,9 @@ try:
                     }
                     for name, val in pairs
                 ]
-            except Exception:
-                pass  # SHAP is optional
+            except Exception as exc:
+                # SHAP is optional — serve the prediction without factors.
+                log.debug("SHAP computation failed: %s", exc)
 
         return result
 
@@ -187,7 +191,7 @@ if __name__ == "__main__":
         model_name = os.environ.get("MODEL_NAME", _DEFAULT_MODEL_NAME)
         stage = os.environ.get("MODEL_STAGE", _DEFAULT_STAGE)
         tag = save_model_to_bentoml(tracking_uri, model_name, stage)
-        print(f"Saved model to BentoML store: {tag}")
+        print(f"Saved model to BentoML store: {tag}")  # noqa: T201 — CLI output
     else:
-        print("Usage: python -m ml.serving.bentoml_service save")
+        print("Usage: python -m ml.serving.bentoml_service save")  # noqa: T201 — CLI output
         sys.exit(1)

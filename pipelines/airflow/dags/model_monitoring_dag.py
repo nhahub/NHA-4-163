@@ -135,9 +135,15 @@ def model_monitoring_dag() -> None:
             cur_df = load_reference_dataset(_DELTA_BASE, current_date)
         except Exception as exc:
             log.warning("Could not load feature data for drift detection: %s", exc)
-            return {"dataset_drifted": False, "drift_share": 0.0, "n_features": 0,
-                    "n_drifted": 0, "prediction_drift_detected": False,
-                    "sufficient_data": False, "error": str(exc)}
+            return {
+                "dataset_drifted": False,
+                "drift_share": 0.0,
+                "n_features": 0,
+                "n_drifted": 0,
+                "prediction_drift_detected": False,
+                "sufficient_data": False,
+                "error": str(exc),
+            }
 
         detector = DriftDetector(reference_df=ref_df)
         report = detector.run(current_df=cur_df)

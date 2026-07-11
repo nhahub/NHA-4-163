@@ -15,17 +15,17 @@ from pyspark.sql.types import IntegerType
 # Map feature flag name → tuple of ICD-10 first-character prefixes.
 # Chapter boundaries follow ICD-10 CM 2024 tabular index.
 _CHAPTER_PREFIXES: dict[str, tuple[str, ...]] = {
-    "has_infectious":     ("A", "B"),
-    "has_oncological":    ("C",),
+    "has_infectious": ("A", "B"),
+    "has_oncological": ("C",),
     "has_haematological": ("D",),
-    "has_metabolic":      ("E",),
-    "has_mental_health":  ("F",),
-    "has_neurological":   ("G",),
+    "has_metabolic": ("E",),
+    "has_mental_health": ("F",),
+    "has_neurological": ("G",),
     "has_cardiovascular": ("I",),
-    "has_respiratory":    ("J",),
-    "has_digestive":      ("K",),
-    "has_musculoskeletal":("M",),
-    "has_genitourinary":  ("N",),
+    "has_respiratory": ("J",),
+    "has_digestive": ("K",),
+    "has_musculoskeletal": ("M",),
+    "has_genitourinary": ("N",),
 }
 
 # Ordered list of chapter feature column names (stable for ML pipelines).
@@ -54,17 +54,17 @@ def build_comorbidity_features(conditions_df: DataFrame) -> DataFrame:
     counts_df = active.groupBy("patient_id").agg(
         F.count("*").cast(IntegerType()).alias("comorbidity_count"),
         F.sum(F.col("is_hereditary").cast(IntegerType()))
-         .cast(IntegerType())
-         .alias("hereditary_condition_count"),
+        .cast(IntegerType())
+        .alias("hereditary_condition_count"),
     )
 
     # Build chapter-level flags: 1 if the patient has ≥1 active condition
     # in that chapter, 0 otherwise.
     first_char = F.col("icd10_code").substr(1, 1)
     chapter_aggs = [
-        F.max(
-            F.when(first_char.isin(*prefixes), 1).otherwise(0)
-        ).cast(IntegerType()).alias(feature_name)
+        F.max(F.when(first_char.isin(*prefixes), 1).otherwise(0))
+        .cast(IntegerType())
+        .alias(feature_name)
         for feature_name, prefixes in _CHAPTER_PREFIXES.items()
     ]
     chapters_df = active.groupBy("patient_id").agg(*chapter_aggs)

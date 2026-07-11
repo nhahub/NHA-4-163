@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
-import pytest
-
 
 # ── fixtures ───────────────────────────────────────────────────────────────────
+
 
 def _ref_df(n: int = 200, seed: int = 0) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
@@ -52,8 +50,8 @@ def _shifted_df(n: int = 200, seed: int = 7) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     return pd.DataFrame(
         {
-            "age": rng.normal(70, 5, n).clip(18, 90),      # mean 70 vs 45
-            "bmi": rng.normal(35, 3, n).clip(15, 50),      # mean 35 vs 27
+            "age": rng.normal(70, 5, n).clip(18, 90),  # mean 70 vs 45
+            "bmi": rng.normal(35, 3, n).clip(15, 50),  # mean 35 vs 27
             "num_relatives": rng.integers(3, 7, n).astype(float),
             "gender": rng.choice(["M", "F", "Other"], n),  # extra category
             "patient_id": [f"r{i}" for i in range(n)],
@@ -64,9 +62,11 @@ def _shifted_df(n: int = 200, seed: int = 7) -> pd.DataFrame:
 
 # ── DriftDetector: basic behaviour ────────────────────────────────────────────
 
+
 class TestDriftDetectorNoDrift:
     def test_returns_drift_report(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector, DriftReport
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -74,6 +74,7 @@ class TestDriftDetectorNoDrift:
 
     def test_no_drift_same_distribution(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -81,6 +82,7 @@ class TestDriftDetectorNoDrift:
 
     def test_feature_count_excludes_patient_id_and_label(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -89,6 +91,7 @@ class TestDriftDetectorNoDrift:
 
     def test_drift_share_between_zero_and_one(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -96,6 +99,7 @@ class TestDriftDetectorNoDrift:
 
     def test_reference_and_current_n(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df(n=200)
         cur = _same_dist_df(ref, n=150)
         det = DriftDetector(reference_df=ref)
@@ -107,6 +111,7 @@ class TestDriftDetectorNoDrift:
 class TestDriftDetectorWithDrift:
     def test_dataset_drifted_on_shifted_distribution(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_shifted_df())
@@ -114,6 +119,7 @@ class TestDriftDetectorWithDrift:
 
     def test_n_drifted_greater_than_half_on_shifted(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_shifted_df())
@@ -121,6 +127,7 @@ class TestDriftDetectorWithDrift:
 
     def test_feature_results_populated(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_shifted_df())
@@ -128,6 +135,7 @@ class TestDriftDetectorWithDrift:
 
     def test_drift_share_equals_n_drifted_over_n_features(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_shifted_df())
@@ -137,9 +145,11 @@ class TestDriftDetectorWithDrift:
 
 # ── DriftDetector: prediction drift ───────────────────────────────────────────
 
+
 class TestPredictionDrift:
     def test_no_prediction_drift_when_col_absent(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref), prediction_col="score")
@@ -148,6 +158,7 @@ class TestPredictionDrift:
 
     def test_no_prediction_drift_same_distribution(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         rng = np.random.default_rng(0)
         ref = _ref_df()
         ref["score"] = rng.uniform(0, 1, len(ref))
@@ -161,6 +172,7 @@ class TestPredictionDrift:
 
     def test_prediction_drift_detected_on_shift(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         rng = np.random.default_rng(1)
         n = 300
         ref = pd.DataFrame({"age": rng.normal(45, 5, n), "score": rng.beta(2, 5, n)})
@@ -172,15 +184,18 @@ class TestPredictionDrift:
 
 # ── DriftDetector: categorical feature handling ────────────────────────────────
 
+
 class TestCategoricalDrift:
     def test_categorical_auto_detected_for_object_dtype(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         assert "gender" in det._cat_features
 
     def test_categorical_not_in_numeric_features(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -190,6 +205,7 @@ class TestCategoricalDrift:
 
     def test_numeric_uses_ks_test(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -198,6 +214,7 @@ class TestCategoricalDrift:
 
     def test_explicit_categorical_override(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref, categorical_features=["age", "bmi"])
         assert "age" in det._cat_features
@@ -205,6 +222,7 @@ class TestCategoricalDrift:
 
     def test_numeric_result_has_means(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = _ref_df()
         det = DriftDetector(reference_df=ref)
         report = det.run(_same_dist_df(ref))
@@ -216,9 +234,11 @@ class TestCategoricalDrift:
 
 # ── DriftDetector: small-sample guard ─────────────────────────────────────────
 
+
 class TestSmallSampleGuard:
     def test_skips_feature_with_fewer_than_5_values(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = pd.DataFrame({"x": [1.0, 2.0, 3.0]})
         cur = pd.DataFrame({"x": [4.0, 5.0, 6.0]})
         det = DriftDetector(reference_df=ref)
@@ -227,6 +247,7 @@ class TestSmallSampleGuard:
 
     def test_analyses_feature_at_exactly_five_values(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = pd.DataFrame({"x": [1.0, 2.0, 3.0, 4.0, 5.0]})
         cur = pd.DataFrame({"x": [10.0, 20.0, 30.0, 40.0, 50.0]})
         det = DriftDetector(reference_df=ref)
@@ -236,25 +257,39 @@ class TestSmallSampleGuard:
 
 # ── FeatureDriftResult ─────────────────────────────────────────────────────────
 
+
 class TestFeatureDriftResult:
     def test_drift_detected_when_p_below_threshold(self) -> None:
         from ml.monitoring.drift_detector import FeatureDriftResult
+
         r = FeatureDriftResult(
-            feature="age", drift_detected=True, statistic=0.9, p_value=0.001,
-            test_name="ks", reference_mean=45.0, current_mean=70.0,
+            feature="age",
+            drift_detected=True,
+            statistic=0.9,
+            p_value=0.001,
+            test_name="ks",
+            reference_mean=45.0,
+            current_mean=70.0,
         )
         assert r.drift_detected is True
 
     def test_no_drift_when_p_above_threshold(self) -> None:
         from ml.monitoring.drift_detector import FeatureDriftResult
+
         r = FeatureDriftResult(
-            feature="bmi", drift_detected=False, statistic=0.05, p_value=0.8,
-            test_name="ks", reference_mean=27.0, current_mean=27.5,
+            feature="bmi",
+            drift_detected=False,
+            statistic=0.05,
+            p_value=0.8,
+            test_name="ks",
+            reference_mean=27.0,
+            current_mean=27.5,
         )
         assert r.drift_detected is False
 
 
 # ── DriftReport ────────────────────────────────────────────────────────────────
+
 
 class TestDriftReport:
     def _make_report(
@@ -266,6 +301,7 @@ class TestDriftReport:
         pred_p: float | None = None,
     ):
         from ml.monitoring.drift_detector import DriftReport, FeatureDriftResult
+
         results = [
             FeatureDriftResult(
                 feature=f"f{i}",
@@ -347,9 +383,11 @@ class TestDriftReport:
 
 # ── _expected_calibration_error ───────────────────────────────────────────────
 
+
 class TestExpectedCalibrationError:
     def _ece(self, y_true, y_proba, n_bins: int = 10) -> float:
         from ml.monitoring.model_monitor import _expected_calibration_error
+
         return _expected_calibration_error(
             np.array(y_true, dtype=float),
             np.array(y_proba, dtype=float),
@@ -407,6 +445,7 @@ class TestExpectedCalibrationError:
 
 # ── PerformanceReport ──────────────────────────────────────────────────────────
 
+
 class TestPerformanceReport:
     def _make_report(
         self,
@@ -419,6 +458,7 @@ class TestPerformanceReport:
         n_labeled: int = 40,
     ):
         from ml.monitoring.model_monitor import PerformanceReport
+
         return PerformanceReport(
             evaluation_date="2026-04-23",
             lookback_days=30,
@@ -484,31 +524,38 @@ class TestPerformanceReport:
 
 # ── Alert threshold logic ──────────────────────────────────────────────────────
 
+
 class TestAlertThresholds:
     """Verify threshold constants are honoured by hand-constructing reports."""
 
     def test_roc_auc_threshold_is_0_70(self) -> None:
         from ml.monitoring.model_monitor import _ALERT_THRESHOLDS
+
         assert _ALERT_THRESHOLDS["roc_auc"] == 0.70
 
     def test_brier_threshold_is_0_25(self) -> None:
         from ml.monitoring.model_monitor import _ALERT_THRESHOLDS
+
         assert _ALERT_THRESHOLDS["brier_score"] == 0.25
 
     def test_ece_threshold_is_0_10(self) -> None:
         from ml.monitoring.model_monitor import _ALERT_THRESHOLDS
+
         assert _ALERT_THRESHOLDS["ece"] == 0.10
 
     def test_min_samples_is_30(self) -> None:
         from ml.monitoring.model_monitor import _MIN_SAMPLES_FOR_EVALUATION
+
         assert _MIN_SAMPLES_FOR_EVALUATION == 30
 
 
 # ── DriftDetector: _ks_test and _chi2_test unit tests ─────────────────────────
 
+
 class TestStatisticalTests:
     def test_ks_test_same_distribution_high_p(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         rng = np.random.default_rng(0)
         a = rng.normal(0, 1, 300)
         b = rng.normal(0, 1, 300)
@@ -517,6 +564,7 @@ class TestStatisticalTests:
 
     def test_ks_test_different_distribution_low_p(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         rng = np.random.default_rng(0)
         a = rng.normal(0, 1, 300)
         b = rng.normal(5, 1, 300)  # 5 sigma shift
@@ -525,12 +573,16 @@ class TestStatisticalTests:
 
     def test_ks_test_returns_two_floats(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
-        stat, p = DriftDetector._ks_test(np.array([1.0, 2.0, 3.0, 4.0, 5.0]), np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+
+        stat, p = DriftDetector._ks_test(
+            np.array([1.0, 2.0, 3.0, 4.0, 5.0]), np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        )
         assert isinstance(stat, float)
         assert isinstance(p, float)
 
     def test_chi2_test_same_dist_high_p(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = pd.Series(["A"] * 100 + ["B"] * 100)
         cur = pd.Series(["A"] * 95 + ["B"] * 105)
         _, p, name = DriftDetector._chi2_test(ref, cur)
@@ -539,6 +591,7 @@ class TestStatisticalTests:
 
     def test_chi2_test_different_dist_low_p(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = pd.Series(["A"] * 1 + ["B"] * 999)
         cur = pd.Series(["A"] * 999 + ["B"] * 1)
         _, p, _ = DriftDetector._chi2_test(ref, cur)
@@ -547,26 +600,36 @@ class TestStatisticalTests:
 
 # ── DriftDetector: _EXCLUDE_COLS guard ────────────────────────────────────────
 
+
 class TestExcludeCols:
     def test_patient_id_excluded(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
-        ref = pd.DataFrame({"patient_id": range(100), "x": np.random.default_rng(0).normal(0, 1, 100)})
+
+        ref = pd.DataFrame(
+            {"patient_id": range(100), "x": np.random.default_rng(0).normal(0, 1, 100)}
+        )
         det = DriftDetector(reference_df=ref)
         report = det.run(
-            pd.DataFrame({"patient_id": range(100), "x": np.random.default_rng(1).normal(5, 1, 100)})
+            pd.DataFrame(
+                {"patient_id": range(100), "x": np.random.default_rng(1).normal(5, 1, 100)}
+            )
         )
         features = [r.feature for r in report.feature_results]
         assert "patient_id" not in features
 
     def test_feature_date_excluded(self) -> None:
         from ml.monitoring.drift_detector import DriftDetector
+
         ref = pd.DataFrame(
             {"feature_date": ["2024-01-01"] * 100, "x": np.random.default_rng(0).normal(0, 1, 100)}
         )
         det = DriftDetector(reference_df=ref)
         report = det.run(
             pd.DataFrame(
-                {"feature_date": ["2025-01-01"] * 100, "x": np.random.default_rng(1).normal(5, 1, 100)}
+                {
+                    "feature_date": ["2025-01-01"] * 100,
+                    "x": np.random.default_rng(1).normal(5, 1, 100),
+                }
             )
         )
         features = [r.feature for r in report.feature_results]

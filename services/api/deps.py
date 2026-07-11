@@ -35,8 +35,8 @@ from services.api.auth.rbac import CurrentUserDep, Permission, require_permissio
 from services.api.services.cache_service import CacheService
 from services.api.services.model_service import ModelService
 
-
 # ── Settings ──────────────────────────────────────────────────────────────────
+
 
 def _get_settings() -> Settings:
     return get_settings()
@@ -46,6 +46,7 @@ SettingsDep = Annotated[Settings, Depends(_get_settings)]
 
 
 # ── Model service ─────────────────────────────────────────────────────────────
+
 
 def _get_model(request: Request) -> ModelService:
     """Return the app-scoped ModelService instance.
@@ -69,6 +70,7 @@ ModelDep = Annotated[ModelService, Depends(_get_model)]
 
 
 # ── Cache service ─────────────────────────────────────────────────────────────
+
 
 def _get_cache(request: Request) -> CacheService:
     """Return the app-scoped CacheService instance.

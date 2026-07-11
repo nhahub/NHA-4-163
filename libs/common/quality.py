@@ -21,11 +21,10 @@ Design decisions:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import great_expectations as gx
-from great_expectations.core.batch import RuntimeBatchRequest
 from great_expectations.data_context import EphemeralDataContext
 from great_expectations.data_context.types.base import DataContextConfig
 
@@ -35,6 +34,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Result type
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ValidationResult:
@@ -55,6 +55,7 @@ class ValidationResult:
 # GE context builder (ephemeral — no filesystem state)
 # ---------------------------------------------------------------------------
 
+
 def _build_context() -> EphemeralDataContext:
     """Build an in-memory GE data context with no filesystem dependencies.
 
@@ -71,46 +72,59 @@ def _build_context() -> EphemeralDataContext:
 # Patient expectations
 # ---------------------------------------------------------------------------
 
-def _patient_suite(context: EphemeralDataContext) -> Any:
+
+def _patient_suite(
+    context: EphemeralDataContext,
+) -> Any:
     suite_name = "patient_suite"
     suite = context.add_or_update_expectation_suite(suite_name)
 
     # CRITICAL: patient_id must be non-null UUID
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "patient_id"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_match_regex",
-        kwargs={
-            "column": "patient_id",
-            "regex": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        },
-        meta={"severity": "critical"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "patient_id"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_match_regex",
+            kwargs={
+                "column": "patient_id",
+                "regex": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            },
+            meta={"severity": "critical"},
+        )
+    )
     # CRITICAL: event_id non-null
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "event_id"},
-        meta={"severity": "critical"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "event_id"},
+            meta={"severity": "critical"},
+        )
+    )
     # WARNING: gender in allowed set
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_be_in_set",
-        kwargs={
-            "column": "gender",
-            "value_set": ["male", "female", "other", "unknown", None],
-            "mostly": 0.99,
-        },
-        meta={"severity": "warning"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_be_in_set",
+            kwargs={
+                "column": "gender",
+                "value_set": ["male", "female", "other", "unknown", None],
+                "mostly": 0.99,
+            },
+            meta={"severity": "warning"},
+        )
+    )
     # WARNING: date_of_birth completeness >= 95%
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "date_of_birth", "mostly": 0.95},
-        meta={"severity": "warning"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "date_of_birth", "mostly": 0.95},
+            meta={"severity": "warning"},
+        )
+    )
     return suite
 
 
@@ -118,43 +132,63 @@ def _patient_suite(context: EphemeralDataContext) -> Any:
 # Diagnosis expectations
 # ---------------------------------------------------------------------------
 
-def _diagnosis_suite(context: EphemeralDataContext) -> Any:
+
+def _diagnosis_suite(
+    context: EphemeralDataContext,
+) -> Any:
     suite_name = "diagnosis_suite"
     suite = context.add_or_update_expectation_suite(suite_name)
 
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "patient_id"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "condition_id"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "code"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_be_in_set",
-        kwargs={
-            "column": "clinical_status",
-            "value_set": ["active", "recurrence", "relapse", "inactive", "remission", "resolved"],
-        },
-        meta={"severity": "critical"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "patient_id"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "condition_id"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "code"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_be_in_set",
+            kwargs={
+                "column": "clinical_status",
+                "value_set": [
+                    "active",
+                    "recurrence",
+                    "relapse",
+                    "inactive",
+                    "remission",
+                    "resolved",
+                ],
+            },
+            meta={"severity": "critical"},
+        )
+    )
     # WARNING: verified diagnoses >= 80% of batch
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_be_in_set",
-        kwargs={
-            "column": "verification_status",
-            "value_set": ["confirmed", "provisional", None],
-            "mostly": 0.80,
-        },
-        meta={"severity": "warning"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_be_in_set",
+            kwargs={
+                "column": "verification_status",
+                "value_set": ["confirmed", "provisional", None],
+                "mostly": 0.80,
+            },
+            meta={"severity": "warning"},
+        )
+    )
     return suite
 
 
@@ -162,40 +196,52 @@ def _diagnosis_suite(context: EphemeralDataContext) -> Any:
 # Observation expectations
 # ---------------------------------------------------------------------------
 
-def _observation_suite(context: EphemeralDataContext) -> Any:
+
+def _observation_suite(
+    context: EphemeralDataContext,
+) -> Any:
     suite_name = "observation_suite"
     suite = context.add_or_update_expectation_suite(suite_name)
 
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "patient_id"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "observation_id"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_not_be_null",
-        kwargs={"column": "effective_datetime"},
-        meta={"severity": "critical"},
-    ))
-    suite.add_expectation(gx.core.ExpectationConfiguration(
-        expectation_type="expect_column_values_to_be_in_set",
-        kwargs={
-            "column": "status",
-            "value_set": ["final", "amended", "corrected", "preliminary"],
-            "mostly": 0.95,
-        },
-        meta={"severity": "warning"},
-    ))
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "patient_id"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "observation_id"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_not_be_null",
+            kwargs={"column": "effective_datetime"},
+            meta={"severity": "critical"},
+        )
+    )
+    suite.add_expectation(
+        gx.core.ExpectationConfiguration(
+            expectation_type="expect_column_values_to_be_in_set",
+            kwargs={
+                "column": "status",
+                "value_set": ["final", "amended", "corrected", "preliminary"],
+                "mostly": 0.95,
+            },
+            meta={"severity": "warning"},
+        )
+    )
     return suite
 
 
 # ---------------------------------------------------------------------------
 # Generic validation runner
 # ---------------------------------------------------------------------------
+
 
 def _run_validation(
     data: list[dict[str, Any]],
@@ -215,6 +261,7 @@ def _run_validation(
 
     try:
         import pandas as pd
+
         df = pd.DataFrame(data)
     except ImportError:
         log.warning("pandas not available — skipping GE validation")
@@ -236,12 +283,14 @@ def _run_validation(
     failures = []
     for r in result.results:
         if not r.success:
-            failures.append({
-                "expectation": r.expectation_config.expectation_type,
-                "column": r.expectation_config.kwargs.get("column", ""),
-                "severity": r.expectation_config.meta.get("severity", "warning"),
-                "partial_unexpected": r.result.get("partial_unexpected_list", [])[:5],
-            })
+            failures.append(
+                {
+                    "expectation": r.expectation_config.expectation_type,
+                    "column": r.expectation_config.kwargs.get("column", ""),
+                    "severity": r.expectation_config.meta.get("severity", "warning"),
+                    "partial_unexpected": r.result.get("partial_unexpected_list", [])[:5],
+                }
+            )
 
     critical_failures = [f for f in failures if f["severity"] == "critical"]
     stats = result.statistics or {}
@@ -260,6 +309,7 @@ def _run_validation(
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def validate_patient_records(records: list[dict[str, Any]]) -> ValidationResult:
     """Run patient data quality checks.

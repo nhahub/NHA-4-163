@@ -78,7 +78,7 @@ def _verify_credentials_sync(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service temporarily unavailable",
-        )
+        ) from exc
 
     if row is None or not row["is_active"]:
         return False, ""
@@ -137,7 +137,7 @@ async def login(body: TokenRequest) -> TokenResponse:
 
     return TokenResponse(
         access_token=token,
-        token_type="bearer",
+        token_type="bearer",  # noqa: S106 — OAuth2 token type, not a secret
         expires_in=expires_in,
         role=role,
     )

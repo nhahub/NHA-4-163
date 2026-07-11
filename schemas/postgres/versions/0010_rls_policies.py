@@ -1,7 +1,7 @@
 """0010 — Service accounts table and PostgreSQL Row Level Security.
 
 Revision: 0010
-Parent:   0009 (audit_log)
+Parent:   m0009 (audit_log)
 
 Changes
 -------
@@ -9,7 +9,7 @@ Changes
    service accounts (clinicians, researchers, admin bots).  Passwords are
    NEVER stored in plaintext; use ``passlib[bcrypt]`` with cost factor 12.
 
-2. Row Level Security (RLS) on ``patients`` — enables Postgres-level
+2. Row Level Security (RLS) on ``patient`` — enables Postgres-level
    access control as a defence-in-depth layer beneath the application's
    RBAC checks.  A ``researcher`` role sees only a de-identified view;
    a ``healthcare_app`` role bypasses RLS (application enforces RBAC).
@@ -35,7 +35,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0010"
-down_revision = "0009"
+down_revision = "m0009"
 branch_labels = None
 depends_on = None
 
@@ -85,8 +85,7 @@ def upgrade() -> None:
     # Strips all 18 HIPAA Safe Harbor direct identifiers.
     # Age is generalised (decade bucket; 90+ collapsed).
     # ZIP is truncated to 3-digit prefix.
-    op.execute(
-        """
+    op.execute("""
         CREATE OR REPLACE VIEW v_patients_deidentified AS
         SELECT
             id,
@@ -108,15 +107,13 @@ def upgrade() -> None:
             gender,
             -- deleted_at kept for data integrity
             deleted_at
-        FROM patients
+        FROM patient
         WHERE deleted_at IS NULL
-        """
-    )
+        """)
 
     # ── 3. healthcare_researcher database role ────────────────────────────────
     # Only created if it does not already exist (idempotent).
-    op.execute(
-        """
+    op.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (
@@ -126,72 +123,54 @@ def upgrade() -> None:
             END IF;
         END
         $$;
-        """
-    )
-    op.execute(
-        "GRANT CONNECT ON DATABASE healthcare TO healthcare_researcher"
-    )
-    op.execute(
-        "GRANT USAGE ON SCHEMA public TO healthcare_researcher"
-    )
-    op.execute(
-        "GRANT SELECT ON v_patients_deidentified TO healthcare_researcher"
-    )
+        """)
+    op.execute("GRANT CONNECT ON DATABASE healthcare TO healthcare_researcher")
+    op.execute("GRANT USAGE ON SCHEMA public TO healthcare_researcher")
+    op.execute("GRANT SELECT ON v_patients_deidentified TO healthcare_researcher")
 
-    # ── 4. Enable RLS on patients ─────────────────────────────────────────────
-    op.execute("ALTER TABLE patients ENABLE ROW LEVEL SECURITY")
+    # ── 4. Enable RLS on patient ──────────────────────────────────────────────
+    op.execute("ALTER TABLE patient ENABLE ROW LEVEL SECURITY")
 
     # healthcare_app (the API role) bypasses RLS — application enforces RBAC
-    op.execute(
-        """
-        CREATE POLICY patients_app_bypass ON patients
+    op.execute("""
+        CREATE POLICY patients_app_bypass ON patient
             AS PERMISSIVE
             FOR ALL
             TO healthcare_app
             USING (true)
             WITH CHECK (true)
-        """
-    )
+        """)
 
-    # healthcare_researcher has NO direct access to patients table
+    # healthcare_researcher has NO direct access to the patient table
     # (they use v_patients_deidentified instead)
-    op.execute(
-        """
-        CREATE POLICY patients_researcher_deny ON patients
+    op.execute("""
+        CREATE POLICY patients_researcher_deny ON patient
             AS RESTRICTIVE
             FOR SELECT
             TO healthcare_researcher
             USING (false)
-        """
-    )
+        """)
 
     # ── 5. Audit log: grant INSERT to healthcare_app (already exists) ─────────
     # Ensure future roles can insert audit entries
-    op.execute(
-        "GRANT INSERT ON audit_log TO healthcare_app"
-    )
-    op.execute(
-        "GRANT SELECT ON service_accounts TO healthcare_app"
-    )
-    op.execute(
-        "GRANT UPDATE (last_login_at, is_active) ON service_accounts TO healthcare_app"
-    )
+    op.execute("GRANT INSERT ON audit_log TO healthcare_app")
+    op.execute("GRANT SELECT ON service_accounts TO healthcare_app")
+    op.execute("GRANT UPDATE (last_login_at, is_active) ON service_accounts TO healthcare_app")
 
 
 def downgrade() -> None:
     """Reverse migration: remove RLS, view, researcher role, service_accounts."""
 
     # Remove RLS policies
-    op.execute("DROP POLICY IF EXISTS patients_researcher_deny ON patients")
-    op.execute("DROP POLICY IF EXISTS patients_app_bypass ON patients")
-    op.execute("ALTER TABLE patients DISABLE ROW LEVEL SECURITY")
+    op.execute("DROP POLICY IF EXISTS patients_researcher_deny ON patient")
+    op.execute("DROP POLICY IF EXISTS patients_app_bypass ON patient")
+    op.execute("ALTER TABLE patient DISABLE ROW LEVEL SECURITY")
 
     # Remove researcher role (revoke grants first)
     op.execute("REVOKE ALL ON v_patients_deidentified FROM healthcare_researcher")
     op.execute("REVOKE ALL ON SCHEMA public FROM healthcare_researcher")
     op.execute("REVOKE CONNECT ON DATABASE healthcare FROM healthcare_researcher")
-    op.execute(
-        """
+    op.execute("""
         DO $$
         BEGIN
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'healthcare_researcher') THEN
@@ -199,8 +178,7 @@ def downgrade() -> None:
             END IF;
         END
         $$;
-        """
-    )
+        """)
 
     # Remove view
     op.execute("DROP VIEW IF EXISTS v_patients_deidentified")

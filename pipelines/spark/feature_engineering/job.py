@@ -71,7 +71,6 @@ from ml.features.registry import (  # noqa: E402
     FEATURE_VECTOR,
     GRAPH,
     MEDICATIONS,
-    FeatureGroup,
 )
 from pipelines.spark.feature_engineering.features.comorbidities import (  # noqa: E402
     build_comorbidity_features,
@@ -108,6 +107,7 @@ _GRAPH_SCHEMA = StructType(
 
 # ── Session factory ───────────────────────────────────────────────────────────
 
+
 def _build_spark_session(minio_endpoint: str, access_key: str, secret_key: str) -> SparkSession:
     """Create a Delta-enabled SparkSession configured for MinIO S3A."""
     builder = (
@@ -122,15 +122,27 @@ def _build_spark_session(minio_endpoint: str, access_key: str, secret_key: str) 
         .config("spark.hadoop.fs.s3a.secret.key", secret_key)
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-        .config("spark.hadoop.fs.s3a.aws.credentials.provider",
-                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
+        .config(
+            "spark.hadoop.fs.s3a.aws.credentials.provider",
+            "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+        )
         # Delta Lake write performance
         .config("spark.databricks.delta.schema.autoMerge.enabled", "true")
     )
-    return configure_spark_with_delta_pip(builder).getOrCreate()
+    # Add the JVM jars pip-installed PySpark does not bundle:
+    #   - PostgreSQL JDBC driver (source-table reads)
+    #   - hadoop-aws + AWS SDK bundle (S3A writes to MinIO)
+    # Resolved from Maven at session start alongside the Delta packages.
+    # hadoop-aws must match PySpark's bundled Hadoop version (3.3.4 for 3.5.x).
+    extra_packages = [
+        "org.postgresql:postgresql:42.7.3",
+        "org.apache.hadoop:hadoop-aws:3.3.4",
+    ]
+    return configure_spark_with_delta_pip(builder, extra_packages=extra_packages).getOrCreate()
 
 
 # ── Postgres JDBC helpers ─────────────────────────────────────────────────────
+
 
 def _jdbc_read(
     spark: SparkSession,
@@ -153,6 +165,7 @@ def _jdbc_read(
 
 # ── Delta MERGE helper ────────────────────────────────────────────────────────
 
+
 def _delta_merge(
     spark: SparkSession,
     df: DataFrame,
@@ -171,19 +184,12 @@ def _delta_merge(
         merge_keys: Column names used for the MERGE condition.
     """
     if not DeltaTable.isDeltaTable(spark, table_path):
-        (
-            df.write.format("delta")
-            .partitionBy("feature_date")
-            .mode("overwrite")
-            .save(table_path)
-        )
+        (df.write.format("delta").partitionBy("feature_date").mode("overwrite").save(table_path))
         log.info("Created new Delta table at %s", table_path)
         return
 
     delta_tbl = DeltaTable.forPath(spark, table_path)
-    merge_condition = " AND ".join(
-        f"target.{k} = source.{k}" for k in merge_keys
-    )
+    merge_condition = " AND ".join(f"target.{k} = source.{k}" for k in merge_keys)
     update_set: dict[str, Any] = {c: F.col(f"source.{c}") for c in df.columns}
 
     (
@@ -198,6 +204,7 @@ def _delta_merge(
 
 # ── Graph features → Spark DataFrame ─────────────────────────────────────────
 
+
 def _graph_features_df(
     spark: SparkSession,
     neo4j_uri: str,
@@ -209,14 +216,13 @@ def _graph_features_df(
     run_gds_write_projection(neo4j_uri, neo4j_user, neo4j_password)
 
     log.info("Extracting bulk graph features from Neo4j…")
-    rows: list[GraphFeatureRow] = extract_all_graph_features(
-        neo4j_uri, neo4j_user, neo4j_password
-    )
+    rows: list[GraphFeatureRow] = extract_all_graph_features(neo4j_uri, neo4j_user, neo4j_password)
     log.info("Extracted graph features for %d patients", len(rows))
     return spark.createDataFrame(rows, schema=_GRAPH_SCHEMA)  # type: ignore[arg-type]
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main(as_of_date: str, delta_base: str) -> None:
     """Run the feature engineering pipeline for a given reference date.
@@ -238,59 +244,55 @@ def main(as_of_date: str, delta_base: str) -> None:
     )
     spark.sparkContext.setLogLevel("WARN")
 
-    jdbc_url = (
-        f"jdbc:postgresql://{pg.host}:{pg.port}/{pg.db}"
-    )
+    jdbc_url = f"jdbc:postgresql://{pg.host}:{pg.port}/{pg.db}"
     jdbc_props = {"user": pg.user, "password": pg.password.get_secret_value()}
 
     log.info("Feature engineering run — as_of_date=%s", as_of_date)
 
     # ── Step 1: Read source tables ────────────────────────────────────────────
+    # Table names are singular (see libs/common/models); the condition ICD-10
+    # value is stored in ``code`` (with ``code_system``), aliased to the
+    # ``icd10_code`` column name the feature builders expect.
     patients_df = _jdbc_read(
-        spark, jdbc_url,
-        "SELECT id, date_of_birth, gender, deleted_at FROM patients",
+        spark,
+        jdbc_url,
+        "SELECT id, date_of_birth, gender, deleted_at FROM patient",
         **jdbc_props,
     )
     conditions_df = _jdbc_read(
-        spark, jdbc_url,
-        "SELECT patient_id, clinical_status, icd10_code, is_hereditary FROM conditions",
+        spark,
+        jdbc_url,
+        "SELECT patient_id, clinical_status, code AS icd10_code, is_hereditary FROM condition",
         **jdbc_props,
     )
     meds_df = _jdbc_read(
-        spark, jdbc_url,
-        "SELECT patient_id, status, medication_code FROM medication_requests",
+        spark,
+        jdbc_url,
+        "SELECT patient_id, status, medication_code FROM medication_request",
         **jdbc_props,
     )
 
     # ── Step 2: Build feature DataFrames ──────────────────────────────────────
-    demog_df = (
-        build_demographics_features(patients_df, as_of_date)
-        .withColumn("feature_date", F.lit(as_of_date))
+    demog_df = build_demographics_features(patients_df, as_of_date).withColumn(
+        "feature_date", F.lit(as_of_date)
     )
-    comor_df = (
-        build_comorbidity_features(conditions_df)
-        .withColumn("feature_date", F.lit(as_of_date))
+    comor_df = build_comorbidity_features(conditions_df).withColumn(
+        "feature_date", F.lit(as_of_date)
     )
-    meds_feat_df = (
-        build_medication_features(meds_df)
-        .withColumn("feature_date", F.lit(as_of_date))
-    )
-    graph_df = (
-        _graph_features_df(
-            spark,
-            neo4j_uri=n4j.uri,
-            neo4j_user=n4j.user,
-            neo4j_password=n4j.password.get_secret_value(),
-        )
-        .withColumn("feature_date", F.lit(as_of_date))
-    )
+    meds_feat_df = build_medication_features(meds_df).withColumn("feature_date", F.lit(as_of_date))
+    graph_df = _graph_features_df(
+        spark,
+        neo4j_uri=n4j.uri,
+        neo4j_user=n4j.user,
+        neo4j_password=n4j.password.get_secret_value(),
+    ).withColumn("feature_date", F.lit(as_of_date))
 
     # ── Step 3: Write individual feature groups ───────────────────────────────
     group_dfs: dict[str, DataFrame] = {
         DEMOGRAPHICS.name: demog_df,
         COMORBIDITIES.name: comor_df,
-        MEDICATIONS.name:   meds_feat_df,
-        GRAPH.name:         graph_df,
+        MEDICATIONS.name: meds_feat_df,
+        GRAPH.name: graph_df,
     }
     merge_keys = ["patient_id", "feature_date"]
     for grp in ALL_GROUPS:
@@ -317,9 +319,7 @@ def main(as_of_date: str, delta_base: str) -> None:
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Healthcare feature engineering batch job"
-    )
+    parser = argparse.ArgumentParser(description="Healthcare feature engineering batch job")
     parser.add_argument(
         "--as-of-date",
         default=str(date.today()),

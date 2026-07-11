@@ -39,16 +39,15 @@ def build_demographics_features(patients_df: DataFrame, as_of_date: str) -> Data
 
     age_group_expr = (
         F.when(F.col("age_years").isNull(), "unknown")
-         .when(F.col("age_years") < 18, "pediatric")
-         .when(F.col("age_years") < 35, "young_adult")
-         .when(F.col("age_years") < 50, "middle_age")
-         .when(F.col("age_years") < 65, "older_adult")
-         .otherwise("elderly")
+        .when(F.col("age_years") < 18, "pediatric")
+        .when(F.col("age_years") < 35, "young_adult")
+        .when(F.col("age_years") < 50, "middle_age")
+        .when(F.col("age_years") < 65, "older_adult")
+        .otherwise("elderly")
     )
 
     return (
-        patients_df
-        .filter(F.col("deleted_at").isNull())
+        patients_df.filter(F.col("deleted_at").isNull())
         .select("id", "date_of_birth", "gender")
         .withColumn("age_years", age_expr)
         .withColumn("age_group", age_group_expr)

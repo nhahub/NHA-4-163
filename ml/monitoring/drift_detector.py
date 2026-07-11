@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
@@ -44,7 +44,7 @@ _EXCLUDE_COLS = frozenset({"patient_id", "feature_date", "label", "split"})
 
 # Drift detection thresholds
 _DATASET_DRIFT_THRESHOLD = 0.5  # >50% features drifted → dataset drift
-_FEATURE_DRIFT_P_VALUE = 0.05   # p-value threshold for per-feature tests
+_FEATURE_DRIFT_P_VALUE = 0.05  # p-value threshold for per-feature tests
 
 
 @dataclass
@@ -186,9 +186,9 @@ class DriftDetector:
             ``DriftReport`` with per-feature and dataset-level results.
         """
         feature_cols = [
-            c for c in self._ref.columns
-            if c not in _EXCLUDE_COLS and c in current_df.columns
-            and c != prediction_col
+            c
+            for c in self._ref.columns
+            if c not in _EXCLUDE_COLS and c in current_df.columns and c != prediction_col
         ]
 
         results: list[FeatureDriftResult] = []
@@ -206,7 +206,11 @@ class DriftDetector:
 
         pred_drifted = False
         pred_p = None
-        if prediction_col and prediction_col in self._ref.columns and prediction_col in current_df.columns:
+        if (
+            prediction_col
+            and prediction_col in self._ref.columns
+            and prediction_col in current_df.columns
+        ):
             ref_pred = self._ref[prediction_col].dropna().values
             cur_pred = current_df[prediction_col].dropna().values
             if len(ref_pred) >= 5 and len(cur_pred) >= 5:
@@ -215,7 +219,10 @@ class DriftDetector:
 
         log.info(
             "Drift report: %d/%d features drifted (%.1f%%), dataset_drifted=%s",
-            n_drifted, len(results), drift_share * 100, dataset_drifted,
+            n_drifted,
+            len(results),
+            drift_share * 100,
+            dataset_drifted,
         )
 
         return DriftReport(
@@ -233,8 +240,8 @@ class DriftDetector:
     def _test_feature(
         self,
         col: str,
-        ref: pd.Series,  # type: ignore[type-arg]
-        cur: pd.Series,  # type: ignore[type-arg]
+        ref: pd.Series,
+        cur: pd.Series,
     ) -> FeatureDriftResult:
         if col in self._cat_features:
             stat, p, test = self._chi2_test(ref, cur)
@@ -262,16 +269,18 @@ class DriftDetector:
     def _ks_test(ref: np.ndarray, cur: np.ndarray) -> tuple[float, float]:
         """Two-sample Kolmogorov-Smirnov test."""
         from scipy import stats
+
         result = stats.ks_2samp(ref, cur)
         return float(result.statistic), float(result.pvalue)
 
     @staticmethod
     def _chi2_test(
-        ref: pd.Series,  # type: ignore[type-arg]
-        cur: pd.Series,  # type: ignore[type-arg]
+        ref: pd.Series,
+        cur: pd.Series,
     ) -> tuple[float, float, str]:
         """Chi-squared test on category frequencies."""
         from scipy import stats
+
         cats = sorted(set(ref.unique()) | set(cur.unique()))
         ref_counts = ref.value_counts().reindex(cats, fill_value=0)
         cur_counts = cur.value_counts().reindex(cats, fill_value=0)
@@ -302,11 +311,6 @@ def load_reference_dataset(
         spark = SparkSession.builder.appName("drift-reference-loader").getOrCreate()
 
     path = f"{delta_base}/features/feature_vector/"
-    df = (
-        spark.read.format("delta")
-        .load(path)
-        .filter(f"feature_date = '{feature_date}'")
-        .toPandas()
-    )
+    df = spark.read.format("delta").load(path).filter(f"feature_date = '{feature_date}'").toPandas()
     log.info("Loaded reference dataset: %d rows from %s", len(df), path)
     return df

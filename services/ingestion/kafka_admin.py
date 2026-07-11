@@ -15,10 +15,10 @@ Design decisions:
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import requests
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 # Topic definitions
 # ---------------------------------------------------------------------------
 
-TOPICS: list[dict] = [
+TOPICS: list[dict[str, Any]] = [
     {
         "name": "patient.created",
         "partitions": 6,
@@ -110,6 +110,7 @@ SCHEMA_MAP: dict[str, str] = {
 # Topic administration
 # ---------------------------------------------------------------------------
 
+
 def create_topics(bootstrap_servers: str) -> None:
     """Create all configured topics.  Idempotent — skips existing topics.
 
@@ -147,6 +148,7 @@ def create_topics(bootstrap_servers: str) -> None:
 # ---------------------------------------------------------------------------
 # Schema Registry
 # ---------------------------------------------------------------------------
+
 
 def register_schema(registry_url: str, topic: str, schema_path: str) -> int:
     """Register (or update) an Avro value schema for a topic.
@@ -209,6 +211,7 @@ def get_latest_schema(registry_url: str, topic: str) -> tuple[int, str]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Bootstrap Kafka topics and register all Avro schemas."""

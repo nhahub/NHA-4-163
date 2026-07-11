@@ -8,7 +8,6 @@ import pytest
 
 from tests.integration.conftest import LiveServiceEndpoints, _http_get
 
-
 pytestmark = pytest.mark.integration
 
 

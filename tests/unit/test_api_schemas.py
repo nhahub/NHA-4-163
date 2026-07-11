@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from pydantic import ValidationError
 
 from services.api.schemas.requests import (
     PredictFromPrescriptionRequest,
@@ -39,6 +40,7 @@ _REQUEST_UUID = uuid.UUID("aaaabbbb-aaaa-bbbb-aaaa-bbbbaaaabbbb")
 
 
 # ── _risk_tier() ──────────────────────────────────────────────────────────────
+
 
 class TestRiskTier:
     def test_low_boundary(self) -> None:
@@ -68,6 +70,7 @@ class TestRiskTier:
 
 # ── PredictHeredityRiskRequest ────────────────────────────────────────────────
 
+
 class TestPredictHeredityRiskRequest:
     def test_defaults(self) -> None:
         req = PredictHeredityRiskRequest(patient_id=_PATIENT_UUID)
@@ -76,78 +79,69 @@ class TestPredictHeredityRiskRequest:
         assert req.feature_date is None
 
     def test_uuid_from_string(self) -> None:
-        req = PredictHeredityRiskRequest(
-            patient_id="12345678-1234-5678-1234-567812345678"
-        )
+        req = PredictHeredityRiskRequest(patient_id="12345678-1234-5678-1234-567812345678")
         assert req.patient_id == _PATIENT_UUID
 
     def test_valid_feature_date(self) -> None:
-        req = PredictHeredityRiskRequest(
-            patient_id=_PATIENT_UUID, feature_date="2024-01-15"
-        )
+        req = PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, feature_date="2024-01-15")
         assert req.feature_date == "2024-01-15"
 
     def test_invalid_feature_date_format(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, feature_date="15-01-2024")
 
     def test_top_n_factors_bounds(self) -> None:
         PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, top_n_factors=1)
         PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, top_n_factors=20)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, top_n_factors=0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PredictHeredityRiskRequest(patient_id=_PATIENT_UUID, top_n_factors=21)
 
     def test_immutable(self) -> None:
         req = PredictHeredityRiskRequest(patient_id=_PATIENT_UUID)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             req.include_shap = False  # type: ignore[misc]
 
 
 # ── PredictFromSymptomsRequest ────────────────────────────────────────────────
 
+
 class TestPredictFromSymptomsRequest:
     def test_valid_codes(self) -> None:
-        req = PredictFromSymptomsRequest(
-            patient_id=_PATIENT_UUID, symptom_codes=["R05.9", "J06.9"]
-        )
+        req = PredictFromSymptomsRequest(patient_id=_PATIENT_UUID, symptom_codes=["R05.9", "J06.9"])
         assert len(req.symptom_codes) == 2
 
     def test_empty_codes_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PredictFromSymptomsRequest(patient_id=_PATIENT_UUID, symptom_codes=[])
 
     def test_too_many_codes_rejected(self) -> None:
         codes = [f"R{i:02d}.0" for i in range(21)]
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PredictFromSymptomsRequest(patient_id=_PATIENT_UUID, symptom_codes=codes)
 
     def test_defaults(self) -> None:
-        req = PredictFromSymptomsRequest(
-            patient_id=_PATIENT_UUID, symptom_codes=["R05.9"]
-        )
+        req = PredictFromSymptomsRequest(patient_id=_PATIENT_UUID, symptom_codes=["R05.9"])
         assert req.include_differential is True
         assert req.top_n == 5
 
 
 # ── PredictFromPrescriptionRequest ────────────────────────────────────────────
 
+
 class TestPredictFromPrescriptionRequest:
     def test_valid(self) -> None:
-        req = PredictFromPrescriptionRequest(
-            patient_id=_PATIENT_UUID, medication_codes=["123456"]
-        )
+        req = PredictFromPrescriptionRequest(patient_id=_PATIENT_UUID, medication_codes=["123456"])
         assert req.medication_codes == ["123456"]
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(Exception):
-            PredictFromPrescriptionRequest(
-                patient_id=_PATIENT_UUID, medication_codes=[]
-            )
+        with pytest.raises(ValidationError):
+            PredictFromPrescriptionRequest(patient_id=_PATIENT_UUID, medication_codes=[])
 
 
 # ── SHAPContribution ──────────────────────────────────────────────────────────
+
 
 class TestSHAPContribution:
     def test_increases_risk(self) -> None:
@@ -155,11 +149,13 @@ class TestSHAPContribution:
         assert s.direction == "increases_risk"
 
     def test_decreases_risk(self) -> None:
-        s = SHAPContribution(feature="adherence_proxy", shap_value=-0.05, direction="decreases_risk")
+        s = SHAPContribution(
+            feature="adherence_proxy", shap_value=-0.05, direction="decreases_risk"
+        )
         assert s.direction == "decreases_risk"
 
     def test_invalid_direction(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SHAPContribution(feature="x", shap_value=0.0, direction="neutral")  # type: ignore[arg-type]
 
     def test_raw_value_optional(self) -> None:
@@ -168,6 +164,7 @@ class TestSHAPContribution:
 
 
 # ── HeredityRiskResponse ──────────────────────────────────────────────────────
+
 
 class TestHeredityRiskResponse:
     def _make(self, **overrides: object) -> HeredityRiskResponse:
@@ -192,9 +189,9 @@ class TestHeredityRiskResponse:
     def test_risk_score_bounds(self) -> None:
         self._make(risk_score=0.0)
         self._make(risk_score=1.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             self._make(risk_score=-0.01)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             self._make(risk_score=1.01)
 
     def test_shap_included(self) -> None:
@@ -217,6 +214,7 @@ class TestHeredityRiskResponse:
 
 # ── FamilyRiskProfileResponse ─────────────────────────────────────────────────
 
+
 class TestFamilyRiskProfileResponse:
     def test_construction(self) -> None:
         profile = FamilyRiskProfileResponse(
@@ -235,9 +233,7 @@ class TestFamilyRiskProfileResponse:
                 )
             ],
             disease_burden_by_chapter={
-                "oncological": ChapterBurden(
-                    affected_relative_count=1, weighted_prevalence=0.5
-                )
+                "oncological": ChapterBurden(affected_relative_count=1, weighted_prevalence=0.5)
             },
             cached=False,
         )
@@ -258,7 +254,7 @@ class TestFamilyRiskProfileResponse:
         }
         FamilyRiskProfileResponse(**{**base, "family_risk_score": 0.0})
         FamilyRiskProfileResponse(**{**base, "family_risk_score": 1.0})
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             FamilyRiskProfileResponse(**{**base, "family_risk_score": -0.01})
 
     def test_empty_family(self) -> None:
@@ -278,6 +274,7 @@ class TestFamilyRiskProfileResponse:
 
 
 # ── HealthResponse ────────────────────────────────────────────────────────────
+
 
 class TestHealthResponse:
     def test_ok_status(self) -> None:
@@ -304,11 +301,12 @@ class TestHealthResponse:
         assert cs.latency_ms == pytest.approx(3.7)
 
     def test_invalid_status(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             HealthResponse(status="unknown", version="0.6.0", components={})  # type: ignore[arg-type]
 
 
 # ── DifferentialDiagnosisResponse ────────────────────────────────────────────
+
 
 class TestDifferentialDiagnosisResponse:
     def test_construction(self) -> None:
@@ -324,7 +322,7 @@ class TestDifferentialDiagnosisResponse:
         assert r.input_type == "symptoms"
 
     def test_invalid_input_type(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             DifferentialDiagnosisResponse(
                 request_id=_REQUEST_UUID,
                 patient_id=_PATIENT_UUID,

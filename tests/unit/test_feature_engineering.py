@@ -14,10 +14,12 @@ a SparkSession.
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from ml.features.registry import (
     ALL_GROUPS,
@@ -25,14 +27,11 @@ from ml.features.registry import (
     DEMOGRAPHICS,
     FEATURE_TO_GROUP,
     FEATURE_VECTOR,
-    GRAPH,
-    MEDICATIONS,
-    FeatureGroup,
 )
 from ml.features.schema import PatientFeatureVector
 from pipelines.spark.feature_engineering.features.comorbidities import (
-    CHAPTER_FEATURE_NAMES,
     _CHAPTER_PREFIXES,
+    CHAPTER_FEATURE_NAMES,
 )
 from pipelines.spark.feature_engineering.features.graph_features import depth_to_weight
 
@@ -41,6 +40,7 @@ _FEATURE_DATE = "2024-01-15"
 
 
 # ── depth_to_weight ───────────────────────────────────────────────────────────
+
 
 class TestDepthToWeight:
     def test_first_degree(self) -> None:
@@ -69,6 +69,7 @@ class TestDepthToWeight:
 
 # ── PatientFeatureVector schema ───────────────────────────────────────────────
 
+
 class TestPatientFeatureVector:
     def _base(self, **overrides: Any) -> dict[str, Any]:
         return {
@@ -93,11 +94,11 @@ class TestPatientFeatureVector:
         assert v.age_years is None
 
     def test_age_years_negative_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(age_years=-1))
 
     def test_age_years_over_150_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(age_years=151))
 
     def test_valid_age_years(self) -> None:
@@ -105,13 +106,13 @@ class TestPatientFeatureVector:
         assert v.age_years == 85
 
     def test_gender_flags_are_binary(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(gender_male=2))
 
     def test_adherence_proxy_bounds(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(adherence_proxy=1.5))
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(adherence_proxy=-0.1))
 
     def test_adherence_proxy_none_allowed(self) -> None:
@@ -123,28 +124,29 @@ class TestPatientFeatureVector:
         assert v.shortest_path_to_affected == -1
 
     def test_shortest_path_below_minus_one_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(shortest_path_to_affected=-2))
 
     def test_clustering_coefficient_above_one_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(family_clustering_coefficient=1.01))
 
     def test_frozen_model(self) -> None:
         v = PatientFeatureVector(**self._base())
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             v.comorbidity_count = 5  # type: ignore[misc]
 
     def test_invalid_feature_date_format(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(feature_date="2024/01/15"))
 
     def test_weighted_prevalence_non_negative(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PatientFeatureVector(**self._base(weighted_family_prevalence=-0.1))
 
 
 # ── Feature registry structure ────────────────────────────────────────────────
+
 
 class TestFeatureRegistry:
     def test_all_groups_non_empty(self) -> None:
@@ -168,7 +170,7 @@ class TestFeatureRegistry:
                 assert FEATURE_TO_GROUP[col] == grp.name
 
     def test_feature_groups_are_frozen(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             DEMOGRAPHICS.name = "hacked"  # type: ignore[misc]
 
     def test_delta_paths_are_distinct(self) -> None:
@@ -177,20 +179,18 @@ class TestFeatureRegistry:
 
     def test_feature_vector_columns_match_pydantic_schema(self) -> None:
         schema_fields = set(PatientFeatureVector.model_fields.keys()) - {
-            "patient_id", "feature_date"
+            "patient_id",
+            "feature_date",
         }
         registry_cols = set(FEATURE_VECTOR.feature_columns)
         in_registry_not_schema = registry_cols - schema_fields
         in_schema_not_registry = schema_fields - registry_cols
-        assert not in_registry_not_schema, (
-            f"In registry but not schema: {in_registry_not_schema}"
-        )
-        assert not in_schema_not_registry, (
-            f"In schema but not registry: {in_schema_not_registry}"
-        )
+        assert not in_registry_not_schema, f"In registry but not schema: {in_registry_not_schema}"
+        assert not in_schema_not_registry, f"In schema but not registry: {in_schema_not_registry}"
 
 
 # ── ICD-10 chapter prefixes ───────────────────────────────────────────────────
+
 
 class TestIcd10ChapterPrefixes:
     def test_chapter_feature_names_sorted(self) -> None:
@@ -206,15 +206,16 @@ class TestIcd10ChapterPrefixes:
         seen: dict[str, str] = {}
         for feature, prefixes in _CHAPTER_PREFIXES.items():
             for prefix in prefixes:
-                assert prefix not in seen, (
-                    f"Prefix '{prefix}' claimed by both '{seen[prefix]}' and '{feature}'"
-                )
+                assert (
+                    prefix not in seen
+                ), f"Prefix '{prefix}' claimed by both '{seen[prefix]}' and '{feature}'"
                 seen[prefix] = feature
 
     def test_chapter_names_match_registry(self) -> None:
         registry_cols = set(COMORBIDITIES.feature_columns)
-        chapter_flags = {f"has_{k.split('_', 1)[1]}" if k.startswith("has_") else k
-                         for k in _CHAPTER_PREFIXES}
+        chapter_flags = {
+            f"has_{k.split('_', 1)[1]}" if k.startswith("has_") else k for k in _CHAPTER_PREFIXES
+        }
         chapter_flags = set(_CHAPTER_PREFIXES.keys())
         missing = chapter_flags - registry_cols
         assert not missing, (

@@ -5,22 +5,27 @@ Revision ID: m0004
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "m0004"
-down_revision: Union[str, None] = "m0003"
+down_revision: str | None = "m0003"
 branch_labels = None
 depends_on = None
 
 _STATUS_ENUM = postgresql.ENUM(
-    "planned", "arrived", "triaged", "in-progress", "onleave",
-    "finished", "cancelled", "entered-in-error", "unknown",
+    "planned",
+    "arrived",
+    "triaged",
+    "in-progress",
+    "onleave",
+    "finished",
+    "cancelled",
+    "entered-in-error",
+    "unknown",
     name="encounter_status",
-    create_type=True,
+    create_type=False,
 )
 
 
@@ -52,8 +57,18 @@ def upgrade() -> None:
         sa.Column("facility_name", sa.String(255)),
         sa.Column("facility_id", sa.String(255)),
         sa.Column("resource_json", postgresql.JSONB),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(255)),
         sa.Column("updated_by", sa.String(255)),
     )
@@ -81,13 +96,11 @@ def upgrade() -> None:
         ),
     )
 
-    op.execute(
-        """
+    op.execute("""
         CREATE TRIGGER trg_encounter_updated_at
         BEFORE UPDATE ON encounter
         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

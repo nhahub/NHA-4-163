@@ -6,7 +6,8 @@ Roles
 ``clinician``   Clinical staff — predict risk, view family profiles, read patient.
 ``researcher``  Data scientists — predict risk on de-identified data only;
                 no family profile access (contains first-degree relative PHI).
-``service``     Machine-to-machine — same as clinician; used by internal services.
+``service``     Machine-to-machine — predict + read only (no write/mutation);
+                used by internal services and EHR integrations.
 
 Permission matrix
 -----------------
@@ -32,8 +33,8 @@ Usage in a route::
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -44,7 +45,7 @@ from services.api.auth.models import UserClaims
 _bearer = HTTPBearer(auto_error=True)
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     """RBAC roles available in the system."""
 
     ADMIN = "admin"
@@ -53,7 +54,7 @@ class Role(str, Enum):
     SERVICE = "service"
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     """Fine-grained permissions checked on each protected endpoint."""
 
     PREDICT_RISK = "predict:risk"
@@ -70,26 +71,32 @@ class Permission(str, Enum):
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.ADMIN: frozenset(Permission),  # all permissions
-    Role.CLINICIAN: frozenset({
-        Permission.PREDICT_RISK,
-        Permission.PREDICT_SYMPTOM,
-        Permission.READ_FAMILY_PROFILE,
-        Permission.READ_PATIENT,
-        Permission.WRITE_PATIENT,
-        Permission.WRITE_CLINICAL,
-        Permission.WRITE_ENCOUNTER,
-        Permission.RUN_BATCH_SCREEN,
-    }),
-    Role.RESEARCHER: frozenset({
-        Permission.PREDICT_RISK,
-        Permission.READ_PATIENT,
-    }),
-    Role.SERVICE: frozenset({
-        Permission.PREDICT_RISK,
-        Permission.PREDICT_SYMPTOM,
-        Permission.READ_FAMILY_PROFILE,
-        Permission.READ_PATIENT,
-    }),
+    Role.CLINICIAN: frozenset(
+        {
+            Permission.PREDICT_RISK,
+            Permission.PREDICT_SYMPTOM,
+            Permission.READ_FAMILY_PROFILE,
+            Permission.READ_PATIENT,
+            Permission.WRITE_PATIENT,
+            Permission.WRITE_CLINICAL,
+            Permission.WRITE_ENCOUNTER,
+            Permission.RUN_BATCH_SCREEN,
+        }
+    ),
+    Role.RESEARCHER: frozenset(
+        {
+            Permission.PREDICT_RISK,
+            Permission.READ_PATIENT,
+        }
+    ),
+    Role.SERVICE: frozenset(
+        {
+            Permission.PREDICT_RISK,
+            Permission.PREDICT_SYMPTOM,
+            Permission.READ_FAMILY_PROFILE,
+            Permission.READ_PATIENT,
+        }
+    ),
 }
 
 
@@ -113,7 +120,7 @@ def _get_current_user(
 CurrentUserDep = Annotated[UserClaims, Depends(_get_current_user)]
 
 
-def require_permission(permission: Permission):  # type: ignore[return]
+def require_permission(permission: Permission) -> Any:
     """FastAPI dependency factory that enforces a single permission.
 
     Creates a dependency that:
@@ -139,14 +146,15 @@ def require_permission(permission: Permission):  # type: ignore[return]
         ) -> HeredityRiskResponse:
             ...
     """
+
     def _check(user: CurrentUserDep) -> UserClaims:
         try:
             role = Role(user.role)
-        except ValueError:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Unknown role '{user.role}'",
-            )
+            ) from exc
         if permission not in ROLE_PERMISSIONS.get(role, frozenset()):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

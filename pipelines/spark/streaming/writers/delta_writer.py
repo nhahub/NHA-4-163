@@ -59,13 +59,14 @@ class DeltaWriter:
             return
 
         path = f"{self._cfg.base_path}/raw/{topic.replace('.', '_')}"
-        enriched = df.withColumn("_year", F.year("event_timestamp")) \
-                     .withColumn("_month", F.month("event_timestamp")) \
-                     .withColumn("_day", F.dayofmonth("event_timestamp"))
+        enriched = (
+            df.withColumn("_year", F.year("event_timestamp"))
+            .withColumn("_month", F.month("event_timestamp"))
+            .withColumn("_day", F.dayofmonth("event_timestamp"))
+        )
 
         (
-            enriched.write
-            .format("delta")
+            enriched.write.format("delta")
             .mode("append")
             .partitionBy("_year", "_month", "_day")
             .option("mergeSchema", "false")
@@ -95,8 +96,9 @@ class DeltaWriter:
             return
 
         path = f"{self._cfg.base_path}/processed/{entity}"
-        enriched = df.withColumn("_year", F.year("event_timestamp")) \
-                     .withColumn("_month", F.month("event_timestamp"))
+        enriched = df.withColumn("_year", F.year("event_timestamp")).withColumn(
+            "_month", F.month("event_timestamp")
+        )
 
         if DeltaTable.isDeltaTable(self._spark, path):
             target = DeltaTable.forPath(self._spark, path)
@@ -112,8 +114,7 @@ class DeltaWriter:
             )
         else:
             (
-                enriched.write
-                .format("delta")
+                enriched.write.format("delta")
                 .mode("overwrite")
                 .partitionBy("_year", "_month")
                 .option("mergeSchema", "true")
@@ -145,13 +146,12 @@ class DeltaWriter:
         path = f"{self._cfg.base_path}/dlq/{topic.replace('.', '_')}"
         enriched = (
             df.withColumn("_batch_id", F.lit(batch_id))
-              .withColumn("_year", F.year("event_timestamp"))
-              .withColumn("_month", F.month("event_timestamp"))
+            .withColumn("_year", F.year("event_timestamp"))
+            .withColumn("_month", F.month("event_timestamp"))
         )
 
         (
-            enriched.write
-            .format("delta")
+            enriched.write.format("delta")
             .mode("append")
             .partitionBy("_year", "_month")
             .option("mergeSchema", "true")
@@ -164,7 +164,7 @@ class DeltaWriter:
         )
 
     @classmethod
-    def from_settings(cls, spark: SparkSession, settings: Any) -> "DeltaWriter":
+    def from_settings(cls, spark: SparkSession, settings: Any) -> DeltaWriter:
         """Construct from the project Settings object.
 
         Args:
@@ -175,6 +175,6 @@ class DeltaWriter:
             Configured ``DeltaWriter``.
         """
         bucket = settings.minio.bucket_delta
-        endpoint = str(settings.minio.endpoint)
+        str(settings.minio.endpoint)
         path = f"s3a://{bucket}"
         return cls(spark, DeltaConfig(base_path=path))

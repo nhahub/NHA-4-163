@@ -38,7 +38,7 @@ class CacheService:
         _client: Underlying redis.asyncio.Redis client.
     """
 
-    def __init__(self, client: aioredis.Redis) -> None:  # type: ignore[type-arg]
+    def __init__(self, client: aioredis.Redis) -> None:
         self._client = client
 
     # ── Generic helpers ───────────────────────────────────────────────────────
@@ -118,7 +118,9 @@ class CacheService:
         Returns:
             Redis key string.
         """
-        codes_hash = hashlib.md5(",".join(sorted(codes)).encode()).hexdigest()[:12]
+        codes_hash = hashlib.md5(
+            ",".join(sorted(codes)).encode(), usedforsecurity=False
+        ).hexdigest()[:12]
         return f"predict:symptoms:{patient_id}:{codes_hash}"
 
     @staticmethod
@@ -132,7 +134,9 @@ class CacheService:
         Returns:
             Redis key string.
         """
-        codes_hash = hashlib.md5(",".join(sorted(codes)).encode()).hexdigest()[:12]
+        codes_hash = hashlib.md5(
+            ",".join(sorted(codes)).encode(), usedforsecurity=False
+        ).hexdigest()[:12]
         return f"predict:prescription:{patient_id}:{codes_hash}"
 
     @staticmethod

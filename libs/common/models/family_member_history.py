@@ -19,9 +19,19 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import date
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, CheckConstraint, Date, Enum, ForeignKey, Integer, Numeric, String, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,7 +41,7 @@ if TYPE_CHECKING:
     from libs.common.models.patient import Patient
 
 
-class FamilyMemberHistoryStatus(str, enum.Enum):
+class FamilyMemberHistoryStatus(enum.StrEnum):
     """FHIR history-status value set."""
 
     PARTIAL = "partial"
@@ -69,7 +79,7 @@ class FamilyMemberHistory(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base)
         index=True,
     )
     # If this family member is also a patient in our system.
-    related_patient_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    related_patient_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("patient.id", ondelete="SET NULL"),
         index=True,
@@ -85,28 +95,26 @@ class FamilyMemberHistory(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base)
     # HL7 v3 FamilyMember code: MTH (mother), FTH (father), SIB (sibling),
     # GRPRN (grandparent), CHLDINLAW (child in-law), etc.
     relationship_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    relationship_display: Mapped[Optional[str]] = mapped_column(String(100))
+    relationship_display: Mapped[str | None] = mapped_column(String(100))
 
     # ── Genetic relatedness ───────────────────────────────────────────────────
-    degree_of_relatedness: Mapped[Optional[float]] = mapped_column(
-        Numeric(precision=5, scale=4)
-    )
+    degree_of_relatedness: Mapped[float | None] = mapped_column(Numeric(precision=5, scale=4))
 
     # ── FHIR FamilyMemberHistory.sex ─────────────────────────────────────────
-    sex: Mapped[Optional[str]] = mapped_column(String(20))
+    sex: Mapped[str | None] = mapped_column(String(20))
 
     # ── FHIR FamilyMemberHistory.born ────────────────────────────────────────
-    born_date: Mapped[Optional[date]] = mapped_column(Date)
+    born_date: Mapped[date | None] = mapped_column(Date)
 
     # ── FHIR FamilyMemberHistory.deceased ────────────────────────────────────
-    deceased: Mapped[Optional[bool]] = mapped_column(Boolean)
-    deceased_age_years: Mapped[Optional[int]] = mapped_column(Integer)
-    deceased_date: Mapped[Optional[date]] = mapped_column(Date)
+    deceased: Mapped[bool | None] = mapped_column(Boolean)
+    deceased_age_years: Mapped[int | None] = mapped_column(Integer)
+    deceased_date: Mapped[date | None] = mapped_column(Date)
 
     # ── FHIR FamilyMemberHistory.condition[] ─────────────────────────────────
     # JSON array: [{"code": {"system": ..., "code": ..., "display": ...},
     #               "outcome": ..., "onset": {...}}]
-    conditions: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    conditions: Mapped[list[Any] | None] = mapped_column(JSONB, default=list)
 
     # ── Neo4j sync status ─────────────────────────────────────────────────────
     # Set to True once the graph pipeline has created the corresponding edges.
@@ -115,10 +123,10 @@ class FamilyMemberHistory(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base)
     )
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    patient: Mapped["Patient"] = relationship(
+    patient: Mapped[Patient] = relationship(
         back_populates="family_member_histories",
         foreign_keys=[patient_id],
     )
-    related_patient: Mapped[Optional["Patient"]] = relationship(
+    related_patient: Mapped[Patient | None] = relationship(
         foreign_keys=[related_patient_id],
     )

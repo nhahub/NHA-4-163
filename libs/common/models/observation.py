@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from libs.common.models.patient import Patient
 
 
-class ObservationStatus(str, enum.Enum):
+class ObservationStatus(enum.StrEnum):
     """FHIR observation-status value set."""
 
     REGISTERED = "registered"
@@ -54,7 +54,7 @@ class Observation(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
         nullable=False,
         index=True,
     )
-    encounter_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    encounter_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("encounter.id", ondelete="SET NULL"),
         index=True,
@@ -69,12 +69,12 @@ class Observation(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
 
     # ── FHIR Observation.category ─────────────────────────────────────────────
     # vital-signs, laboratory, imaging, exam, survey, social-history, activity
-    category: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    category: Mapped[str | None] = mapped_column(String(100), index=True)
 
     # ── FHIR Observation.code (LOINC preferred) ───────────────────────────────
     code_system: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    code_display: Mapped[Optional[str]] = mapped_column(String(500))
+    code_display: Mapped[str | None] = mapped_column(String(500))
 
     # ── FHIR Observation.effective ────────────────────────────────────────────
     effective_datetime: Mapped[datetime] = mapped_column(
@@ -82,26 +82,26 @@ class Observation(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     )
 
     # ── FHIR Observation.value[x] — polymorphic ───────────────────────────────
-    value_quantity: Mapped[Optional[float]] = mapped_column(Numeric(precision=18, scale=6))
-    value_unit: Mapped[Optional[str]] = mapped_column(String(50))
-    value_unit_system: Mapped[Optional[str]] = mapped_column(String(255))
-    value_string: Mapped[Optional[str]] = mapped_column(String(500))
-    value_boolean: Mapped[Optional[bool]] = mapped_column(Boolean)
-    value_codeable_code: Mapped[Optional[str]] = mapped_column(String(50))
-    value_codeable_display: Mapped[Optional[str]] = mapped_column(String(500))
+    value_quantity: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=6))
+    value_unit: Mapped[str | None] = mapped_column(String(50))
+    value_unit_system: Mapped[str | None] = mapped_column(String(255))
+    value_string: Mapped[str | None] = mapped_column(String(500))
+    value_boolean: Mapped[bool | None] = mapped_column(Boolean)
+    value_codeable_code: Mapped[str | None] = mapped_column(String(50))
+    value_codeable_display: Mapped[str | None] = mapped_column(String(500))
 
     # ── FHIR Observation.referenceRange ──────────────────────────────────────
-    ref_range_low: Mapped[Optional[float]] = mapped_column(Numeric(precision=18, scale=6))
-    ref_range_high: Mapped[Optional[float]] = mapped_column(Numeric(precision=18, scale=6))
-    ref_range_text: Mapped[Optional[str]] = mapped_column(String(255))
+    ref_range_low: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=6))
+    ref_range_high: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=6))
+    ref_range_text: Mapped[str | None] = mapped_column(String(255))
 
     # ── FHIR Observation.interpretation ──────────────────────────────────────
     # HL7 v3 ObservationInterpretation: H, L, N, A, AA, HH, LL, etc.
-    interpretation: Mapped[Optional[str]] = mapped_column(String(10))
+    interpretation: Mapped[str | None] = mapped_column(String(10))
 
     # ── Full FHIR resource ────────────────────────────────────────────────────
-    resource_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    resource_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    patient: Mapped["Patient"] = relationship(back_populates="observations")
-    encounter: Mapped[Optional["Encounter"]] = relationship(back_populates="observations")
+    patient: Mapped[Patient] = relationship(back_populates="observations")
+    encounter: Mapped[Encounter | None] = relationship(back_populates="observations")

@@ -19,13 +19,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 log = logging.getLogger(__name__)
 
 _ICD10_CHAPTERS: dict[str, str] = {
-    "A": "has_infectious", "B": "has_infectious",
+    "A": "has_infectious",
+    "B": "has_infectious",
     "C": "has_oncological",
     "D": "has_haematological",
     "E": "has_metabolic",
@@ -48,21 +49,24 @@ _FAMILY_RELS = "HAS_RELATIVE|IS_PARENT_OF|HAS_CHILD|IS_SIBLING_OF"
 
 # ── Postgres queries ──────────────────────────────────────────────────────────
 
+# Table/column names follow the canonical ORM schema (singular tables).
+# ``condition.code`` holds the diagnosis code (ICD-10 or SNOMED); the ICD-10
+# chapter flag is derived from its leading letter — non-ICD codes yield no flag.
 _DEMOGRAPHICS_SQL = """
 SELECT date_of_birth, gender
-FROM patients
+FROM patient
 WHERE id = %(patient_id)s AND deleted_at IS NULL
 """
 
 _CONDITIONS_SQL = """
-SELECT clinical_status, icd10_code, is_hereditary
-FROM conditions
+SELECT clinical_status, code AS icd10_code, is_hereditary
+FROM condition
 WHERE patient_id = %(patient_id)s
 """
 
 _MEDICATIONS_SQL = """
 SELECT status, medication_code
-FROM medication_requests
+FROM medication_request
 WHERE patient_id = %(patient_id)s
 """
 
@@ -130,9 +134,8 @@ LIMIT 50
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
 
-def _compute_age_features(
-    dob: date | None, as_of: date
-) -> tuple[int | None, str, int, int, int]:
+
+def _compute_age_features(dob: date | None, as_of: date) -> tuple[int | None, str, int, int, int]:
     """Return (age_years, age_group_ordinal, gender_male, gender_female, gender_other)."""
     if dob is None:
         return None, "unknown", 0, 0, 0
@@ -157,6 +160,7 @@ def _chapter_flag(icd10_code: str) -> str | None:
 
 
 # ── Main feature computation ──────────────────────────────────────────────────
+
 
 def compute_features_sync(
     patient_id: str,
@@ -231,17 +235,19 @@ def compute_features_sync(
 
     # ── Comorbidity features ──────────────────────────────────────────────────
     active = [r for r in cond_rows if r["clinical_status"] in _ACTIVE_STATUSES]
-    chapter_flags: dict[str, int] = {v: 0 for v in set(_ICD10_CHAPTERS.values())}
+    chapter_flags: dict[str, int] = dict.fromkeys(set(_ICD10_CHAPTERS.values()), 0)
     for r in active:
         flag = _chapter_flag(r["icd10_code"] or "")
         if flag:
             chapter_flags[flag] = 1
 
-    feats.update({
-        "comorbidity_count": len(active),
-        "hereditary_condition_count": sum(1 for r in active if r["is_hereditary"]),
-        **chapter_flags,
-    })
+    feats.update(
+        {
+            "comorbidity_count": len(active),
+            "hereditary_condition_count": sum(1 for r in active if r["is_hereditary"]),
+            **chapter_flags,
+        }
+    )
 
     # ── Medication features ───────────────────────────────────────────────────
     n_active = sum(1 for r in med_rows if r["status"] == "active")
@@ -249,13 +255,15 @@ def compute_features_sync(
     n_stopped = sum(1 for r in med_rows if r["status"] in _STOPPED_STATUSES)
     n_distinct = len({r["medication_code"] for r in med_rows if r["medication_code"]})
     denom = n_completed + n_stopped
-    feats.update({
-        "active_medication_count": n_active,
-        "completed_medication_count": n_completed,
-        "stopped_medication_count": n_stopped,
-        "distinct_medication_count": n_distinct,
-        "adherence_proxy": (n_completed / denom) if denom > 0 else None,
-    })
+    feats.update(
+        {
+            "active_medication_count": n_active,
+            "completed_medication_count": n_completed,
+            "stopped_medication_count": n_stopped,
+            "distinct_medication_count": n_distinct,
+            "adherence_proxy": (n_completed / denom) if denom > 0 else None,
+        }
+    )
 
     # ── Graph features ────────────────────────────────────────────────────────
     driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
@@ -268,19 +276,21 @@ def compute_features_sync(
     finally:
         driver.close()
 
-    feats.update({
-        "affected_relatives_count": int(prev.get("affected_relatives_count") or 0),
-        "weighted_family_prevalence": float(prev.get("weighted_family_prevalence") or 0.0),
-        "first_degree_affected_count": int(prev.get("first_degree_affected_count") or 0),
-        "second_degree_affected_count": int(prev.get("second_degree_affected_count") or 0),
-        "shortest_path_to_affected": int(
-            path_rec["shortest_path_to_affected"] if path_rec else -1
-        ),
-        "family_size": int(size_rec["family_size"] if size_rec else 0),
-        "family_clustering_coefficient": float(
-            clus_rec["family_clustering_coefficient"] if clus_rec else 0.0
-        ),
-    })
+    feats.update(
+        {
+            "affected_relatives_count": int(prev.get("affected_relatives_count") or 0),
+            "weighted_family_prevalence": float(prev.get("weighted_family_prevalence") or 0.0),
+            "first_degree_affected_count": int(prev.get("first_degree_affected_count") or 0),
+            "second_degree_affected_count": int(prev.get("second_degree_affected_count") or 0),
+            "shortest_path_to_affected": int(
+                path_rec["shortest_path_to_affected"] if path_rec else -1
+            ),
+            "family_size": int(size_rec["family_size"] if size_rec else 0),
+            "family_clustering_coefficient": float(
+                clus_rec["family_clustering_coefficient"] if clus_rec else 0.0
+            ),
+        }
+    )
 
     return feats
 
@@ -308,7 +318,12 @@ async def compute_features(
     """
     return await asyncio.to_thread(
         compute_features_sync,
-        patient_id, postgres_dsn, neo4j_uri, neo4j_user, neo4j_password, as_of_date,
+        patient_id,
+        postgres_dsn,
+        neo4j_uri,
+        neo4j_user,
+        neo4j_password,
+        as_of_date,
     )
 
 

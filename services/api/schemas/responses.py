@@ -36,6 +36,7 @@ def _risk_tier(score: float) -> RiskTier:
 
 # ── Hereditary risk ───────────────────────────────────────────────────────────
 
+
 class SHAPContribution(BaseModel):
     """Single feature's contribution to the model prediction."""
 
@@ -65,6 +66,7 @@ class HeredityRiskResponse(BaseModel):
 
 # ── Differential diagnosis ────────────────────────────────────────────────────
 
+
 class DiseasePrediction(BaseModel):
     """Single disease entry in a differential diagnosis list."""
 
@@ -90,6 +92,7 @@ class DifferentialDiagnosisResponse(BaseModel):
 
 
 # ── Family risk profile ────────────────────────────────────────────────────────
+
 
 class RelativeRecord(BaseModel):
     """One relative in the patient's family graph."""
@@ -128,6 +131,7 @@ class FamilyRiskProfileResponse(BaseModel):
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
+
 
 class ComponentStatus(BaseModel):
     status: Literal["ok", "degraded", "down"]

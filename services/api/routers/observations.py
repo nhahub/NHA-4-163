@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -34,13 +33,13 @@ router = APIRouter(tags=["observations"])
 # ── LOINC codes for common vitals ─────────────────────────────────────────────
 VITALS_MAP: dict[str, tuple[str, str, str]] = {
     # field_name: (LOINC code, display name, unit)
-    "systolic_bp":  ("8480-6",  "Systolic blood pressure",  "mmHg"),
-    "diastolic_bp": ("8462-4",  "Diastolic blood pressure", "mmHg"),
-    "heart_rate":   ("8867-4",  "Heart rate",               "/min"),
-    "temperature":  ("8310-5",  "Body temperature",         "Cel"),
-    "spo2":         ("2708-6",  "Oxygen saturation",        "%"),
-    "weight":       ("29463-7", "Body weight",              "kg"),
-    "height":       ("8302-2",  "Body height",              "cm"),
+    "systolic_bp": ("8480-6", "Systolic blood pressure", "mmHg"),
+    "diastolic_bp": ("8462-4", "Diastolic blood pressure", "mmHg"),
+    "heart_rate": ("8867-4", "Heart rate", "/min"),
+    "temperature": ("8310-5", "Body temperature", "Cel"),
+    "spo2": ("2708-6", "Oxygen saturation", "%"),
+    "weight": ("29463-7", "Body weight", "kg"),
+    "height": ("8302-2", "Body height", "cm"),
 }
 
 
@@ -261,6 +260,7 @@ async def update_observation(
 @router.delete(
     "/observations/{observation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete observation",
 )
 async def delete_observation(observation_id: uuid.UUID, db: DbSession) -> None:

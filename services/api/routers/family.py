@@ -92,9 +92,7 @@ async def create_family_member(
     response_model=list[FamilyMemberResponse],
     summary="List family members",
 )
-async def list_family_members(
-    patient_id: uuid.UUID, db: DbSession
-) -> list[FamilyMemberResponse]:
+async def list_family_members(patient_id: uuid.UUID, db: DbSession) -> list[FamilyMemberResponse]:
     """List all family members for a patient.
 
     Args:
@@ -165,6 +163,7 @@ async def update_family_member(
 @router.delete(
     "/family/{family_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Remove a family link",
 )
 async def delete_family_member(family_id: uuid.UUID, db: DbSession) -> None:

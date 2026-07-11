@@ -122,7 +122,7 @@ class EncryptionSettings(BaseSettings):
     key: SecretStr = Field(
         ...,
         description="Primary Fernet key (32-byte URL-safe base64). "
-        "Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"",
+        'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"',  # noqa: E501 — long literal (SQL/markdown), not splittable
     )
     key_id: str = Field(default="v1", description="Key identifier stored alongside ciphertext")
     previous_key: SecretStr | None = Field(
@@ -155,12 +155,12 @@ class Settings(BaseSettings):
     @property
     def postgres(self) -> PostgresSettings:
         """Return validated Postgres settings."""
-        return PostgresSettings()
+        return PostgresSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def neo4j(self) -> Neo4jSettings:
         """Return validated Neo4j settings."""
-        return Neo4jSettings()
+        return Neo4jSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def kafka(self) -> KafkaSettings:
@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     @property
     def minio(self) -> MinioSettings:
         """Return validated MinIO settings."""
-        return MinioSettings()
+        return MinioSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def mlflow(self) -> MLflowSettings:
@@ -180,22 +180,22 @@ class Settings(BaseSettings):
     @property
     def redis(self) -> RedisSettings:
         """Return validated Redis settings."""
-        return RedisSettings()
+        return RedisSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def app(self) -> AppSettings:
         """Return validated app-level settings."""
-        return AppSettings()
+        return AppSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def jwt(self) -> JWTSettings:
         """Return validated JWT settings."""
-        return JWTSettings()
+        return JWTSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
     @property
     def encryption(self) -> EncryptionSettings:
         """Return validated encryption settings."""
-        return EncryptionSettings()
+        return EncryptionSettings()  # type: ignore[call-arg]  # pydantic-settings populates required fields from env
 
 
 @lru_cache(maxsize=1)

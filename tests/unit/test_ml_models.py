@@ -19,7 +19,6 @@ services.
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,17 +27,15 @@ import pytest
 from ml.models.calibration import CalibrationMethod, calibrate
 from ml.models.gnn_model import GNNConfig
 from ml.models.xgboost_model import XGBConfig
-from ml.training.dataset import apply_split, build_dataset, patient_id_split
+from ml.training.dataset import apply_split, patient_id_split
 from ml.training.evaluate import (
-    EvaluationResult,
-    ThresholdMetrics,
     evaluate_binary_classifier,
     expected_calibration_error,
 )
-from ml.training.fairness import FairnessReport, compute_fairness_report
-
+from ml.training.fairness import compute_fairness_report
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _binary_arrays(
     n: int = 200,
@@ -54,6 +51,7 @@ def _binary_arrays(
 
 
 # ── expected_calibration_error ────────────────────────────────────────────────
+
 
 class TestExpectedCalibrationError:
     def test_perfect_calibration_is_near_zero(self) -> None:
@@ -85,6 +83,7 @@ class TestExpectedCalibrationError:
 
 
 # ── evaluate_binary_classifier ────────────────────────────────────────────────
+
 
 class TestEvaluateBinaryClassifier:
     def test_perfect_model_auc_one(self) -> None:
@@ -141,6 +140,7 @@ class TestEvaluateBinaryClassifier:
 
 # ── Fairness metrics ──────────────────────────────────────────────────────────
 
+
 class TestFairnessReport:
     def _make_inputs(
         self,
@@ -195,6 +195,7 @@ class TestFairnessReport:
 
 # ── patient_id_split ──────────────────────────────────────────────────────────
 
+
 class TestPatientIdSplit:
     def _make_pids(self, n: int, pos_rate: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
         pids = np.array([str(uuid.uuid4()) for _ in range(n)])
@@ -231,6 +232,7 @@ class TestPatientIdSplit:
 
 # ── Config dataclasses ────────────────────────────────────────────────────────
 
+
 class TestXGBConfig:
     def test_defaults_are_sensible(self) -> None:
         cfg = XGBConfig()
@@ -259,6 +261,7 @@ class TestGNNConfig:
 
 # ── CalibrationMethod ─────────────────────────────────────────────────────────
 
+
 class TestCalibrationMethod:
     def test_values(self) -> None:
         assert CalibrationMethod.SIGMOID.value == "sigmoid"
@@ -272,7 +275,7 @@ class TestCalibrationMethod:
         proba = np.clip(y.astype(float) * 0.9 + 0.05 + rng.normal(0, 0.05, n), 0.01, 0.99)
 
         cal_model = calibrate(
-            lambda x: proba[:len(x)],
+            lambda x: proba[: len(x)],
             np.zeros((n, 1)),
             y,
             CalibrationMethod.SIGMOID,
@@ -293,7 +296,7 @@ class TestCalibrationMethod:
         proba = np.full(50, 0.5)
         with pytest.raises(ValueError, match="both positive and negative"):
             calibrate(
-                lambda x: proba[:len(x)],
+                lambda x: proba[: len(x)],
                 np.zeros((50, 1)),
                 np.zeros(50, dtype=int),
                 CalibrationMethod.SIGMOID,
