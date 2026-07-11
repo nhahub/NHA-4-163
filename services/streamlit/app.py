@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -143,84 +142,10 @@ def predict_risk(model: Any, features: dict[str, Any]) -> tuple[float, str]:
 # ── Page: Dashboard ──────────────────────────────────────────────────────────
 
 if page == "📊 Dashboard":
+    from services.streamlit.views.dashboard_metrics import render_dashboard_overview
+
     st.title("📊 Healthcare Dashboard")
-
-    # TODO: Replace mock metrics with real database queries (Phase 2+)
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Total Patients", "1,234", "+45")
-
-    with col2:
-        st.metric("At-Risk Patients", "387", "+23")
-
-    with col3:
-        st.metric("Model Accuracy", "92.5%", "+2.3%")
-
-    with col4:
-        st.metric("Predictions (Today)", "156", "+12")
-
-    st.markdown("---")
-
-    # Risk distribution
-    st.subheader("Risk Score Distribution")
-
-    # Generate mock distribution
-    risk_scores = np.random.beta(2, 5, 500)  # TODO: Use real prediction data
-
-    fig = px.histogram(
-        x=risk_scores,
-        nbins=30,
-        title="Distribution of Patient Risk Scores",
-        labels={"x": "Risk Score", "count": "Number of Patients"},
-        color_discrete_sequence=["#636EFA"],
-    )
-    fig.update_layout(hovermode="x unified")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Age group analysis
-    st.subheader("Risk by Demographics")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        age_groups = ["18-30", "31-45", "46-60", "61-75", "75+"]
-        risk_by_age = [0.15, 0.28, 0.42, 0.58, 0.71]
-
-        fig = px.bar(
-            x=age_groups,
-            y=risk_by_age,
-            title="Average Risk Score by Age Group",
-            labels={"x": "Age Group", "y": "Risk Score"},
-            color=risk_by_age,
-            color_continuous_scale="RdYlGn_r",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        genders = ["Male", "Female"]
-        risk_by_gender = [0.35, 0.38]
-
-        fig = px.bar(
-            x=genders,
-            y=risk_by_gender,
-            title="Average Risk Score by Gender",
-            labels={"x": "Gender", "y": "Risk Score"},
-            color=risk_by_gender,
-            color_continuous_scale="RdYlGn_r",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Recent predictions
-    st.subheader("Recent Predictions")
-    # TODO: Query recent predictions from PostgreSQL prediction_log table
-    recent_data = {
-        "Patient ID": ["P001", "P002", "P003", "P004", "P005"],
-        "Risk Score": [0.78, 0.42, 0.65, 0.25, 0.88],
-        "Risk Category": ["🔴 High", "🟡 Moderate", "🔴 High", "🟢 Low", "🔴 High"],
-        "Age": [58, 34, 72, 22, 65],
-        "Predicted": ["2 hours ago", "1 hour ago", "45 min ago", "30 min ago", "15 min ago"],
-    }
-    st.dataframe(pd.DataFrame(recent_data), use_container_width=True)
+    render_dashboard_overview()
 
 
 # ── Page: Patient Management ─────────────────────────────────────────────────
@@ -647,16 +572,50 @@ elif page == "📈 Analytics":
     Monitor system performance, data quality, and model health metrics.
     """)
 
+    from services.streamlit.views.screening_page import _get_db
+
+    analytics_conn = _get_db()
+
+    # Live data-quality figures from the in-memory panel.
+    dq = pd.read_sql_query(
+        """
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN gender IS NULL OR gender = '' OR gender = 'unknown'
+                     THEN 1 ELSE 0 END) AS missing_gender,
+            SUM(CASE WHEN date_of_birth IS NULL OR date_of_birth = ''
+                     THEN 1 ELSE 0 END) AS missing_dob
+        FROM patients WHERE deleted_at IS NULL
+        """,
+        analytics_conn,
+    ).iloc[0]
+    total_pts = int(dq["total"]) or 1
+    missing_cells = int(dq["missing_gender"]) + int(dq["missing_dob"])
+    missing_pct = missing_cells / (total_pts * 2)
+    # A duplicate = same name + DOB appearing more than once.
+    dup_patients = pd.read_sql_query(
+        """
+        SELECT COUNT(*) AS dups FROM (
+            SELECT given_name, family_name, date_of_birth
+            FROM patients WHERE deleted_at IS NULL
+            GROUP BY given_name, family_name, date_of_birth
+            HAVING COUNT(*) > 1
+        )
+        """,
+        analytics_conn,
+    ).iloc[0]["dups"]
+
     col1, col2 = st.columns(2)
 
-    # TODO: Connect to real monitoring endpoints (Prometheus / PostgreSQL)
     with col1:
         st.subheader("Data Quality")
-        st.metric("Missing Values", "0.2%", "-0.1%")
-        st.metric("Duplicate Patients", 0)
-        st.metric("Data Freshness", "2 hours old")
+        st.metric("Total Patients", f"{total_pts:,}")
+        st.metric("Missing Values", f"{missing_pct:.1%}")
+        st.metric("Duplicate Patients", int(dup_patients))
 
     with col2:
+        # System-health figures are infrastructure signals, not derivable from
+        # the demo DB — shown as representative values.
         st.subheader("System Health")
         st.metric("Database Latency", "45ms", "-5ms")
         st.metric("API Uptime", "99.95%")
@@ -664,24 +623,31 @@ elif page == "📈 Analytics":
 
     st.markdown("---")
 
-    # Time series
+    # Time series — real daily prediction counts from prediction_log.
     st.subheader("Predictions Over Time")
 
-    # TODO: Query real prediction counts from prediction_log table
-    dates = pd.date_range(start="2026-04-01", end="2026-05-14", freq="D")
-    predictions = np.random.randint(50, 200, len(dates))
-
-    df_ts = pd.DataFrame({"Date": dates, "Predictions": predictions})
-
-    fig = px.line(
-        df_ts,
-        x="Date",
-        y="Predictions",
-        title="Daily Predictions Count",
-        markers=True,
-        color_discrete_sequence=["#636EFA"],
+    df_ts = pd.read_sql_query(
+        """
+        SELECT substr(predicted_at, 1, 10) AS Date, COUNT(*) AS Predictions
+        FROM prediction_log
+        GROUP BY substr(predicted_at, 1, 10)
+        ORDER BY Date
+        """,
+        analytics_conn,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    if df_ts.empty:
+        st.info("No predictions recorded yet. Run a batch screening first.")
+    else:
+        df_ts["Date"] = pd.to_datetime(df_ts["Date"])
+        fig = px.line(
+            df_ts,
+            x="Date",
+            y="Predictions",
+            title="Daily Predictions Count",
+            markers=True,
+            color_discrete_sequence=["#636EFA"],
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     # Model drift detection
     st.subheader("Model Drift Detection")

@@ -7,13 +7,19 @@ database for demonstration when PostgreSQL is not available.
 
 from __future__ import annotations
 
+import random
 import sqlite3
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
 import streamlit as st
+
+# Size of the synthetic patient panel seeded for the standalone demo. Every
+# aggregate view (Dashboard, Population Health, Batch Screening) derives its
+# metrics from this panel, so bumping it here updates the whole app at once.
+DEMO_PATIENT_COUNT = 10_000
 
 # ── In-memory database for standalone demo ────────────────────────────────────
 
@@ -320,6 +326,77 @@ def _seed_demo_data(conn: sqlite3.Connection) -> None:
     conn.executemany(
         "INSERT INTO medications (id, patient_id, medication_code, medication_display, status, intent, dosage_text, dose_quantity, dose_unit) VALUES (?,?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
         meds,
+    )
+    conn.commit()
+
+    # Bulk synthetic panel so aggregate metrics reflect a realistic population.
+    _seed_bulk_patients(conn, DEMO_PATIENT_COUNT)
+
+
+# Demographic distributions for the synthetic panel (weights are approximate US
+# census proportions — enough to make aggregate charts look plausible).
+_GENDERS = (["female"] * 49) + (["male"] * 49) + (["other"] * 2)
+_ETHNICITIES = ["Hispanic"] * 18 + ["Non-Hispanic"] * 78 + [None] * 4
+_RACES = (
+    ["White"] * 60
+    + ["Black"] * 13
+    + ["Asian"] * 6
+    + ["Native American"] * 2
+    + ["Pacific Islander"] * 1
+    + ["Other"] * 12
+    + [None] * 6
+)
+_STATES = [
+    "CA", "TX", "FL", "NY", "PA", "IL", "OH", "GA",
+    "NC", "MI", "NJ", "VA", "WA", "AZ", "MA", "TN",
+]
+
+
+def _seed_bulk_patients(conn: sqlite3.Connection, count: int) -> None:
+    """Insert ``count`` synthetic patients with plausible demographics.
+
+    Uses a fixed RNG seed so the panel — and therefore every derived metric —
+    is reproducible across sessions. The five named demo patients seeded above
+    are preserved for the Patient Detail views; these bulk records exist purely
+    to make population-level metrics realistic.
+
+    Args:
+        conn: Open SQLite connection whose ``patients`` table already exists.
+        count: Number of synthetic patients to generate.
+    """
+    if count <= 0:
+        return
+
+    rng = random.Random(42)  # noqa: S311 — synthetic demo data, not cryptographic
+    today = date.today()
+    rows = []
+    for i in range(count):
+        gender = rng.choice(_GENDERS)
+        # Age 18–90, uniform-ish, converted to a concrete date of birth.
+        age = rng.randint(18, 90)
+        dob = today - timedelta(days=age * 365 + rng.randint(0, 364))
+        rows.append(
+            (
+                str(uuid.uuid4()),
+                "Patient",
+                f"S-{i:05d}",
+                None,
+                dob.isoformat(),
+                gender,
+                rng.choice(_ETHNICITIES),
+                rng.choice(_RACES),
+                None,
+                None,
+                None,
+                rng.choice(_STATES),
+                "US",
+                int(rng.random() < 0.30),  # ~30% research consent
+            )
+        )
+
+    conn.executemany(
+        "INSERT INTO patients (id, given_name, family_name, middle_name, date_of_birth, gender, ethnicity, race, phone, email, city, state, country, research_consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",  # noqa: E501 — long literal (SQL/markdown), not splittable
+        rows,
     )
     conn.commit()
 
