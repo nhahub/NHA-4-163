@@ -85,10 +85,14 @@ def render_dashboard_overview() -> None:
     from services.streamlit.views.screening_page import _get_db
 
     today_iso = date.today().isoformat()
-    preds_today = _get_db().execute(
-        "SELECT COUNT(*) FROM prediction_log WHERE substr(predicted_at, 1, 10) = ?",
-        (today_iso,),
-    ).fetchone()[0]
+    preds_today = (
+        _get_db()
+        .execute(
+            "SELECT COUNT(*) FROM prediction_log WHERE substr(predicted_at, 1, 10) = ?",
+            (today_iso,),
+        )
+        .fetchone()[0]
+    )
 
     # ── KPI row ───────────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)

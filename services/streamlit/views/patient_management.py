@@ -347,8 +347,22 @@ _RACES = (
     + [None] * 6
 )
 _STATES = [
-    "CA", "TX", "FL", "NY", "PA", "IL", "OH", "GA",
-    "NC", "MI", "NJ", "VA", "WA", "AZ", "MA", "TN",
+    "CA",
+    "TX",
+    "FL",
+    "NY",
+    "PA",
+    "IL",
+    "OH",
+    "GA",
+    "NC",
+    "MI",
+    "NJ",
+    "VA",
+    "WA",
+    "AZ",
+    "MA",
+    "TN",
 ]
 
 
