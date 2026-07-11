@@ -5,6 +5,9 @@ on:
     branches: [main, staging, dev]
   pull_request:
     branches: [main, staging, dev]
+  # Integration tests spin up the full service stack, which needs more resources
+  # than a standard hosted runner — run them on demand rather than every push.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -161,12 +164,15 @@ jobs:
           exit-code: "0"
           ignore-unfixed: true
 
-  # ── Integration tests (only on push to main/staging) ────────────────────────
+  # ── Integration tests (manual dispatch only) ────────────────────────────────
+  # Brings up the entire Compose stack (Postgres, Neo4j, Kafka, Spark, MinIO,
+  # MLflow, Redis) which exceeds the resources of a standard hosted runner, so
+  # this is opt-in via "Run workflow" rather than blocking every push.
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: [test-unit, docker-build]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+    if: github.event_name == 'workflow_dispatch'
     env:
       POSTGRES_PASSWORD: ci_test_password
       NEO4J_PASSWORD: ci_test_password
