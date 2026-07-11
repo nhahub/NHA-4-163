@@ -1,0 +1,27 @@
+# Gitleaks configuration for the Healthcare Hereditary Disease Prediction System.
+#
+# Extends the built-in gitleaks ruleset and allowlists test-only dummy secrets.
+# The values below are non-production fixtures used purely to exercise config
+# loading and encryption code paths in the unit tests — they never protect any
+# real data. Production secrets are supplied via environment variables / Vault
+# and are never committed (see .env, which is gitignored).
+
+title = "Healthcare gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow test-only dummy secrets and fixture material"
+
+# Test fixtures and helpers only ever contain throwaway credentials.
+paths = [
+  '''tests/.*''',
+]
+
+# Belt-and-suspenders: allow the specific dummy values regardless of location.
+regexes = [
+  '''AfwbrqjgC2GZhjmpDwEk-C2pek3soYubE1PblA55wUs=''',
+  '''test_jwt_secret_key_at_least_32_chars_long''',
+  '''test_app_secret_key_at_least_32_chars_long''',
+]
