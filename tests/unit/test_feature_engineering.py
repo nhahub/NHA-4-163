@@ -29,11 +29,18 @@ from ml.features.registry import (
     FEATURE_VECTOR,
 )
 from ml.features.schema import PatientFeatureVector
-from pipelines.spark.feature_engineering.features.comorbidities import (
+
+# The pipelines.spark.* modules import pyspark at module load; skip this file
+# when pyspark is not installed (it is exercised in the integration suite).
+pytest.importorskip("pyspark")
+
+from pipelines.spark.feature_engineering.features.comorbidities import (  # noqa: E402
     _CHAPTER_PREFIXES,
     CHAPTER_FEATURE_NAMES,
 )
-from pipelines.spark.feature_engineering.features.graph_features import depth_to_weight
+from pipelines.spark.feature_engineering.features.graph_features import (  # noqa: E402
+    depth_to_weight,
+)
 
 _PATIENT_UUID = str(uuid.uuid4())
 _FEATURE_DATE = "2024-01-15"

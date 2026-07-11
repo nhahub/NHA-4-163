@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import pytest
 
-from pipelines.spark.streaming.transforms.identity_resolution import (
+# The pipelines.spark.* modules import pyspark at module load; skip this file
+# when pyspark is not installed (it is exercised in the integration suite).
+pytest.importorskip("pyspark")
+
+from pipelines.spark.streaming.transforms.identity_resolution import (  # noqa: E402
     MATCH_THRESHOLD,
     PatientRecord,
     _build_block_key,
