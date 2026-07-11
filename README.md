@@ -386,8 +386,8 @@ docs/         decisions/ (ADRs), runbooks/
 
 ## License
 
-See [LICENSE](LICENSE). This project handles simulated/synthetic healthcare data for
-development; do not load real PHI without completing the security controls in the
-compliance phase.
+Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
+This project handles simulated/synthetic healthcare data for development; do not
+load real PHI without completing the security controls in the compliance phase.
 ```
 

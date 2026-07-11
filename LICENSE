@@ -1,34 +1,21 @@
-Copyright © 2024 Healthcare Team. All rights reserved.
+MIT License
 
-PROPRIETARY LICENSE AGREEMENT
+Copyright © 2024 Healthcare Team
 
-This software, including all source code, documentation, and related materials
-("Software"), is proprietary and confidential. The Software is owned and
-controlled by Healthcare Team ("Company").
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. RESTRICTED USE
-   The Software is provided solely for authorized internal use. Unauthorized
-   copying, distribution, or use of the Software is strictly prohibited and
-   may result in civil and criminal liability.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-
-3. LIMITATION OF LIABILITY
-   IN NO EVENT SHALL THE COMPANY BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
-   SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR RELATING
-   TO THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
-
-4. INTELLECTUAL PROPERTY
-   All title and intellectual property rights in and to the Software are the
-   sole property of the Company. This Agreement does not grant you any
-   ownership interest in the Software.
-
-5. CONFIDENTIALITY
-   You agree to maintain the confidentiality of the Software and any related
-   information and not to disclose it to third parties without prior written
-   consent from the Company.
-
-For licensing inquiries, contact: team@healthcare.local
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
